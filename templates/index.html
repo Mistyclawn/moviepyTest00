@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MoviePy 웹 비디오 에디터</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .upload-section {
+            background: #f8f9fa;
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 30px;
+            border: 2px dashed #007bff;
+            transition: all 0.3s ease;
+        }
+
+        .upload-section:hover {
+            border-color: #0056b3;
+            background: #e3f2fd;
+        }
+
+        .upload-area {
+            text-align: center;
+            padding: 20px;
+        }
+
+        .file-input {
+            display: none;
+        }
+
+        .upload-btn {
+            background: linear-gradient(45deg, #007bff, #0056b3);
+            color: white;
+            padding: 12px 30px;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0, 123, 255, 0.3);
+        }
+
+        .upload-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 123, 255, 0.4);
+        }
+
+        .file-list {
+            margin-top: 20px;
+        }
+
+        .file-item {
+            background: white;
+            margin: 10px 0;
+            padding: 15px;
+            border-radius: 10px;
+            border-left: 4px solid #007bff;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .file-info {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .file-type {
+            padding: 5px 10px;
+            border-radius: 15px;
+            font-size: 12px;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+
+        .file-type.video {
+            background: #e3f2fd;
+            color: #1976d2;
+        }
+
+        .file-type.image {
+            background: #f3e5f5;
+            color: #7b1fa2;
+        }
+
+        .file-type.audio {
+            background: #e8f5e8;
+            color: #388e3c;
+        }
+
+        .operation-section {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .operation-card {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+            border-top: 4px solid #28a745;
+        }
+
+        .operation-card h3 {
+            color: #333;
+            margin-bottom: 15px;
+            font-size: 1.3em;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #555;
+        }
+
+        .form-group select,
+        .form-group input,
+        .form-group textarea {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s ease;
+        }
+
+        .form-group select:focus,
+        .form-group input:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #007bff;
+            box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+        }
+
+        .process-btn {
+            background: linear-gradient(45deg, #28a745, #20c997);
+            color: white;
+            padding: 12px 25px;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+            width: 100%;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(40, 167, 69, 0.3);
+        }
+
+        .process-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(40, 167, 69, 0.4);
+        }
+
+        .process-btn:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .progress {
+            margin-top: 20px;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #e9ecef;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(45deg, #007bff, #0056b3);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        .result-section {
+            background: #f8f9fa;
+            border-radius: 15px;
+            padding: 25px;
+            margin-top: 30px;
+        }
+
+        .download-btn {
+            background: linear-gradient(45deg, #dc3545, #c82333);
+            color: white;
+            padding: 12px 25px;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+            text-decoration: none;
+            display: inline-block;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(220, 53, 69, 0.3);
+        }
+
+        .download-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(220, 53, 69, 0.4);
+            text-decoration: none;
+            color: white;
+        }
+
+        .message {
+            padding: 15px;
+            border-radius: 8px;
+            margin: 10px 0;
+            font-weight: bold;
+        }
+
+        .message.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .message.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #007bff;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .time-inputs {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎬 MoviePy 웹 비디오 에디터</h1>
+        
+        <!-- 파일 업로드 섹션 -->
+        <div class="upload-section">
+            <div class="upload-area">
+                <h3>파일 업로드</h3>
+                <p>비디오, 이미지, 오디오 파일을 업로드하세요</p>
+                <input type="file" id="fileInput" class="file-input" multiple 
+                       accept=".mp4,.avi,.mov,.mkv,.webm,.jpg,.jpeg,.png,.gif,.bmp,.mp3,.wav,.aac,.m4a,.ogg">
+                <button class="upload-btn" onclick="document.getElementById('fileInput').click()">
+                    📁 파일 선택
+                </button>
+            </div>
+            
+            <div class="file-list" id="fileList">
+                <!-- 업로드된 파일 목록이 여기에 표시됩니다 -->
+            </div>
+        </div>
+
+        <!-- 작업 섹션 -->
+        <div class="operation-section">
+            <!-- 영상/이미지 합치기 -->
+            <div class="operation-card">
+                <h3>🎞️ 영상/이미지 합치기</h3>
+                <div class="form-group">
+                    <label>합칠 파일들 선택:</label>
+                    <div id="concatenateFiles"></div>
+                </div>
+                <button class="process-btn" onclick="concatenateMedia()">영상 합치기</button>
+                <div class="loading" id="concatenateLoading">
+                    <div class="spinner"></div>
+                    <p>영상을 합치는 중...</p>
+                </div>
+            </div>
+
+            <!-- 음악 추가 -->
+            <div class="operation-card">
+                <h3>🎵 음악 추가</h3>
+                <div class="form-group">
+                    <label>비디오 파일:</label>
+                    <select id="videoSelect"></select>
+                </div>
+                <div class="form-group">
+                    <label>오디오 파일:</label>
+                    <select id="audioSelect"></select>
+                </div>
+                <button class="process-btn" onclick="addAudio()">음악 추가</button>
+                <div class="loading" id="audioLoading">
+                    <div class="spinner"></div>
+                    <p>음악을 추가하는 중...</p>
+                </div>
+            </div>
+
+            <!-- 자막 추가 -->
+            <div class="operation-card">
+                <h3>💬 자막 추가</h3>
+                <div class="form-group">
+                    <label>비디오 파일:</label>
+                    <select id="subtitleVideoSelect"></select>
+                </div>
+                <div class="form-group">
+                    <label>자막 텍스트:</label>
+                    <textarea id="subtitleText" rows="3" placeholder="자막 내용을 입력하세요"></textarea>
+                </div>
+                <div class="form-group">
+                    <label>시간 설정 (초):</label>
+                    <div class="time-inputs">
+                        <input type="number" id="startTime" placeholder="시작 시간" value="0" min="0" step="0.1">
+                        <input type="number" id="endTime" placeholder="종료 시간" value="5" min="0" step="0.1">
+                    </div>
+                </div>
+                <button class="process-btn" onclick="addSubtitle()">자막 추가</button>
+                <div class="loading" id="subtitleLoading">
+                    <div class="spinner"></div>
+                    <p>자막을 추가하는 중...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 결과 섹션 -->
+        <div class="result-section" id="resultSection" style="display: none;">
+            <h3>🎉 처리 완료</h3>
+            <div id="resultMessage"></div>
+            <div id="downloadLink"></div>
+        </div>
+
+        <!-- 메시지 표시 영역 -->
+        <div id="messageArea"></div>
+    </div>
+
+    <script>
+        let uploadedFiles = [];
+
+        // 파일 업로드 이벤트
+        document.getElementById('fileInput').addEventListener('change', handleFileUpload);
+
+        async function handleFileUpload(event) {
+            const files = event.target.files;
+            
+            for (let file of files) {
+                const formData = new FormData();
+                formData.append('file', file);
+                
+                try {
+                    showMessage('파일을 업로드하는 중...', 'info');
+                    
+                    const response = await fetch('/upload', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    
+                    const result = await response.json();
+                    
+                    if (response.ok) {
+                        uploadedFiles.push(result);
+                        showMessage(`${result.original_name} 업로드 완료!`, 'success');
+                        updateFileList();
+                        updateSelectors();
+                    } else {
+                        showMessage(result.error, 'error');
+                    }
+                } catch (error) {
+                    showMessage('업로드 중 오류가 발생했습니다.', 'error');
+                }
+            }
+        }
+
+        function updateFileList() {
+            const fileList = document.getElementById('fileList');
+            fileList.innerHTML = '';
+            
+            uploadedFiles.forEach((file, index) => {
+                const fileItem = document.createElement('div');
+                fileItem.className = 'file-item';
+                fileItem.innerHTML = `
+                    <div class="file-info">
+                        <span class="file-type ${file.type}">${file.type}</span>
+                        <span>${file.original_name}</span>
+                    </div>
+                    <button onclick="removeFile(${index})" style="background: #dc3545; color: white; border: none; padding: 5px 10px; border-radius: 5px; cursor: pointer;">삭제</button>
+                `;
+                fileList.appendChild(fileItem);
+            });
+        }
+
+        function removeFile(index) {
+            uploadedFiles.splice(index, 1);
+            updateFileList();
+            updateSelectors();
+        }
+
+        function updateSelectors() {
+            // 비디오 파일 선택기 업데이트
+            const videoSelects = ['videoSelect', 'subtitleVideoSelect'];
+            videoSelects.forEach(selectId => {
+                const select = document.getElementById(selectId);
+                select.innerHTML = '<option value="">비디오 파일을 선택하세요</option>';
+                
+                uploadedFiles.filter(f => f.type === 'video').forEach(file => {
+                    const option = document.createElement('option');
+                    option.value = file.filename;
+                    option.textContent = file.original_name;
+                    select.appendChild(option);
+                });
+            });
+
+            // 오디오 파일 선택기 업데이트
+            const audioSelect = document.getElementById('audioSelect');
+            audioSelect.innerHTML = '<option value="">오디오 파일을 선택하세요</option>';
+            
+            uploadedFiles.filter(f => f.type === 'audio').forEach(file => {
+                const option = document.createElement('option');
+                option.value = file.filename;
+                option.textContent = file.original_name;
+                audioSelect.appendChild(option);
+            });
+
+            // 연결할 파일 선택기 업데이트
+            updateConcatenateFiles();
+        }
+
+        function updateConcatenateFiles() {
+            const container = document.getElementById('concatenateFiles');
+            container.innerHTML = '';
+            
+            uploadedFiles.filter(f => f.type === 'video' || f.type === 'image').forEach((file, index) => {
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.id = `concat_${index}`;
+                checkbox.value = file.filename;
+                checkbox.dataset.type = file.type;
+                
+                const label = document.createElement('label');
+                label.htmlFor = `concat_${index}`;
+                label.textContent = ` ${file.original_name} (${file.type})`;
+                
+                const div = document.createElement('div');
+                div.style.marginBottom = '10px';
+                div.appendChild(checkbox);
+                div.appendChild(label);
+                
+                // 이미지인 경우 지속시간 입력 추가
+                if (file.type === 'image') {
+                    const durationInput = document.createElement('input');
+                    durationInput.type = 'number';
+                    durationInput.placeholder = '지속시간(초)';
+                    durationInput.value = '3';
+                    durationInput.min = '0.1';
+                    durationInput.step = '0.1';
+                    durationInput.style.marginLeft = '10px';
+                    durationInput.style.width = '100px';
+                    durationInput.id = `duration_${index}`;
+                    div.appendChild(durationInput);
+                }
+                
+                container.appendChild(div);
+            });
+        }
+
+        async function concatenateMedia() {
+            const checkboxes = document.querySelectorAll('#concatenateFiles input[type="checkbox"]:checked');
+            
+            if (checkboxes.length < 2) {
+                showMessage('최소 2개의 파일을 선택해야 합니다.', 'error');
+                return;
+            }
+            
+            const files = Array.from(checkboxes).map(cb => {
+                const fileData = {
+                    filename: cb.value,
+                    type: cb.dataset.type
+                };
+                
+                // 이미지인 경우 지속시간 추가
+                if (cb.dataset.type === 'image') {
+                    const durationInput = document.getElementById(`duration_${cb.id.split('_')[1]}`);
+                    fileData.duration = parseFloat(durationInput.value) || 3;
+                }
+                
+                return fileData;
+            });
+            
+            document.getElementById('concatenateLoading').style.display = 'block';
+            
+            try {
+                const response = await fetch('/process', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        operation: 'concatenate',
+                        files: files
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    showResult(result.message, result.output_file);
+                } else {
+                    showMessage(result.error, 'error');
+                }
+            } catch (error) {
+                showMessage('처리 중 오류가 발생했습니다.', 'error');
+            } finally {
+                document.getElementById('concatenateLoading').style.display = 'none';
+            }
+        }
+
+        async function addAudio() {
+            const videoFile = document.getElementById('videoSelect').value;
+            const audioFile = document.getElementById('audioSelect').value;
+            
+            if (!videoFile || !audioFile) {
+                showMessage('비디오 파일과 오디오 파일을 모두 선택해야 합니다.', 'error');
+                return;
+            }
+            
+            document.getElementById('audioLoading').style.display = 'block';
+            
+            try {
+                const response = await fetch('/process', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        operation: 'add_audio',
+                        video_file: videoFile,
+                        audio_file: audioFile
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    showResult(result.message, result.output_file);
+                } else {
+                    showMessage(result.error, 'error');
+                }
+            } catch (error) {
+                showMessage('처리 중 오류가 발생했습니다.', 'error');
+            } finally {
+                document.getElementById('audioLoading').style.display = 'none';
+            }
+        }
+
+        async function addSubtitle() {
+            const videoFile = document.getElementById('subtitleVideoSelect').value;
+            const subtitleText = document.getElementById('subtitleText').value;
+            const startTime = parseFloat(document.getElementById('startTime').value) || 0;
+            const endTime = parseFloat(document.getElementById('endTime').value) || 5;
+            
+            if (!videoFile || !subtitleText) {
+                showMessage('비디오 파일과 자막 텍스트를 입력해야 합니다.', 'error');
+                return;
+            }
+            
+            if (startTime >= endTime) {
+                showMessage('종료 시간은 시작 시간보다 커야 합니다.', 'error');
+                return;
+            }
+            
+            document.getElementById('subtitleLoading').style.display = 'block';
+            
+            try {
+                const response = await fetch('/process', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        operation: 'add_subtitle',
+                        video_file: videoFile,
+                        subtitle_text: subtitleText,
+                        start_time: startTime,
+                        end_time: endTime
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    showResult(result.message, result.output_file);
+                } else {
+                    showMessage(result.error, 'error');
+                }
+            } catch (error) {
+                showMessage('처리 중 오류가 발생했습니다.', 'error');
+            } finally {
+                document.getElementById('subtitleLoading').style.display = 'none';
+            }
+        }
+
+        function showMessage(message, type) {
+            const messageArea = document.getElementById('messageArea');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${type}`;
+            messageDiv.textContent = message;
+            
+            messageArea.appendChild(messageDiv);
+            
+            // 3초 후 메시지 삭제
+            setTimeout(() => {
+                messageDiv.remove();
+            }, 3000);
+        }
+
+        function showResult(message, filename) {
+            const resultSection = document.getElementById('resultSection');
+            const resultMessage = document.getElementById('resultMessage');
+            const downloadLink = document.getElementById('downloadLink');
+            
+            resultMessage.innerHTML = `<div class="message success">${message}</div>`;
+            downloadLink.innerHTML = `<a href="/download/${filename}" class="download-btn">📥 다운로드</a>`;
+            
+            resultSection.style.display = 'block';
+            resultSection.scrollIntoView({ behavior: 'smooth' });
+        }
+
+        // 페이지 로드 시 업로드된 파일 목록 불러오기
+        window.addEventListener('load', async () => {
+            try {
+                const response = await fetch('/files');
+                const result = await response.json();
+                
+                if (response.ok) {
+                    uploadedFiles = result.files.map(file => ({
+                        filename: file.filename,
+                        type: file.type,
+                        original_name: file.filename
+                    }));
+                    updateFileList();
+                    updateSelectors();
+                }
+            } catch (error) {
+                console.log('기존 파일 목록을 불러올 수 없습니다.');
+            }
+        });
+    </script>
+</body>
+</html>
