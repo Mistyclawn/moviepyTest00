@@ -1,22 +1,25 @@
 from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
+import os
 
 # MoviePy import (editor 없이)
 from moviepy.video.io.VideoFileClip import VideoFileClip
 from moviepy.audio.io.AudioFileClip import AudioFileClip
 from moviepy.video.VideoClip import ImageClip, TextClip
 from moviepy.video.compositing.CompositeVideoClip import CompositeVideoClip
-import sys
-import importlib.util
-import types
-# moviepy 내부 실제 경로에서 concatenate_videoclips 직접 import
-_concat_path = os.path.join(os.path.dirname(VideoFileClip.__file__), '..', 'compositing', 'concatenate.py')
-_concat_path = os.path.abspath(_concat_path)
-spec = importlib.util.spec_from_file_location("concatenate", _concat_path)
-_concat_mod = importlib.util.module_from_spec(spec)
-sys.modules["concatenate"] = _concat_mod
-spec.loader.exec_module(_concat_mod)
-concatenate_videoclips = _concat_mod.concatenate_videoclips
+from moviepy import concatenate_videoclips
+
+# CompositeAudioClip import 시도
+try:
+    from moviepy.audio.compositing.CompositeAudioClip import CompositeAudioClip
+except ImportError:
+    try:
+        from moviepy.audio.AudioClip import CompositeAudioClip
+    except ImportError:
+        try:
+            from moviepy import CompositeAudioClip
+        except ImportError:
+            CompositeAudioClip = None
 
 import os
 import tempfile
@@ -99,6 +102,8 @@ def process_video():
             return add_audio_to_video(data)
         elif operation == 'add_subtitle':
             return add_subtitle_to_video(data)
+        elif operation == 'create_final_video':
+            return create_final_video(data)
         else:
             return jsonify({'error': '지원하지 않는 작업입니다'}), 400
     except Exception as e:
@@ -145,44 +150,68 @@ def concatenate_media(data):
     })
 
 def add_audio_to_video(data):
-    """비디오에 음악 추가"""
-    video_file = data.get('video_file')
+    """여러 영상을 합치고 전체에 배경음악 추가"""
+    files = data.get('files', [])
     audio_file = data.get('audio_file')
     
-    if not video_file or not audio_file:
-        return jsonify({'error': '비디오 파일과 오디오 파일이 모두 필요합니다'}), 400
+    if len(files) < 1:
+        return jsonify({'error': '최소 1개의 비디오/이미지 파일이 필요합니다'}), 400
     
-    video_path = os.path.join(app.config['UPLOAD_FOLDER'], video_file)
+    if not audio_file:
+        return jsonify({'error': '배경음악 파일이 필요합니다'}), 400
+    
+    clips = []
+    
+    # 모든 비디오/이미지 클립 로드
+    for file_info in files:
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], file_info['filename'])
+        
+        if file_info['type'] == 'video':
+            clip = VideoFileClip(filepath)
+        elif file_info['type'] == 'image':
+            # 이미지는 지정된 시간 또는 기본 3초 동안 표시
+            duration = file_info.get('duration', 3)
+            clip = ImageClip(filepath, duration=duration)
+        
+        clips.append(clip)
+    
+    # 모든 클립을 연결하여 하나의 비디오로 만들기
+    if len(clips) > 1:
+        combined_video = concatenate_videoclips(clips, method="compose")
+    else:
+        combined_video = clips[0]
+    
+    # 배경음악 로드
     audio_path = os.path.join(app.config['UPLOAD_FOLDER'], audio_file)
-    
-    # 비디오와 오디오 로드
-    video_clip = VideoFileClip(video_path)
     audio_clip = AudioFileClip(audio_path)
     
-    # 오디오 길이를 비디오 길이에 맞춤
-    if audio_clip.duration > video_clip.duration:
-        audio_clip = audio_clip.subclip(0, video_clip.duration)
+    # 배경음악을 비디오 길이에 맞춤
+    if audio_clip.duration > combined_video.duration:
+        # 음악이 더 길면 비디오 길이에 맞춰 자르기
+        audio_clip = audio_clip.subclip(0, combined_video.duration)
     else:
-        # 오디오가 짧으면 반복
-        audio_clip = audio_clip.loop(duration=video_clip.duration)
+        # 음악이 더 짧으면 반복하여 비디오 길이에 맞춤
+        audio_clip = audio_clip.loop(duration=combined_video.duration)
     
-    # 비디오에 오디오 추가
-    final_clip = video_clip.set_audio(audio_clip)
+    # 비디오에 배경음악 추가
+    final_clip = combined_video.set_audio(audio_clip)
     
     # 출력 파일명 생성
-    output_filename = f"with_audio_{uuid.uuid4()}.mp4"
+    output_filename = f"with_background_music_{uuid.uuid4()}.mp4"
     output_path = os.path.join(app.config['OUTPUT_FOLDER'], output_filename)
     
     # 비디오 저장
     final_clip.write_videofile(output_path, codec='libx264', audio_codec='aac')
     
     # 메모리 정리
-    video_clip.close()
+    for clip in clips:
+        clip.close()
+    combined_video.close()
     audio_clip.close()
     final_clip.close()
     
     return jsonify({
-        'message': '오디오가 성공적으로 추가되었습니다',
+        'message': '배경음악이 포함된 비디오가 성공적으로 생성되었습니다',
         'output_file': output_filename
     })
 
@@ -229,6 +258,124 @@ def add_subtitle_to_video(data):
     
     return jsonify({
         'message': '자막이 성공적으로 추가되었습니다',
+        'output_file': output_filename
+    })
+
+def create_final_video(data):
+    """모든 요소를 포함한 최종 비디오 생성"""
+    files = data.get('files', [])
+    audio_file = data.get('audio_file')
+    audio_volume = data.get('audio_volume', 50)
+    subtitles = data.get('subtitles', [])
+    output_quality = data.get('output_quality', 'medium')
+    video_title = data.get('video_title', 'Final Video')
+    
+    if len(files) < 1:
+        return jsonify({'error': '최소 1개의 비디오/이미지 파일이 필요합니다'}), 400
+    
+    clips = []
+    
+    # 1단계: 모든 파일을 클립으로 변환
+    for file_info in files:
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], file_info['filename'])
+        
+        if file_info['type'] == 'video':
+            clip = VideoFileClip(filepath)
+        elif file_info['type'] == 'image':
+            duration = file_info.get('duration', 3)
+            clip = ImageClip(filepath, duration=duration)
+        
+        clips.append(clip)
+    
+    # 2단계: 클립들을 연결
+    if len(clips) > 1:
+        final_clip = concatenate_videoclips(clips, method="compose")
+    else:
+        final_clip = clips[0]
+    
+    # 3단계: 배경음악 추가 (있는 경우)
+    if audio_file:
+        audio_path = os.path.join(app.config['UPLOAD_FOLDER'], audio_file)
+        audio_clip = AudioFileClip(audio_path)
+        
+        # 오디오 볼륨 조정
+        audio_clip = audio_clip.volumex(audio_volume / 100.0)
+        
+        # 오디오가 비디오보다 길면 자르고, 짧으면 반복
+        if audio_clip.duration > final_clip.duration:
+            audio_clip = audio_clip.subclip(0, final_clip.duration)
+        elif audio_clip.duration < final_clip.duration:
+            # 오디오를 반복해서 비디오 길이에 맞춤
+            loops = int(final_clip.duration / audio_clip.duration) + 1
+            audio_clip = audio_clip.loop(loops).subclip(0, final_clip.duration)
+        
+        # 기존 오디오와 배경음악 믹싱 (기존 오디오가 있는 경우)
+        if final_clip.audio is not None:
+            if CompositeAudioClip is not None:
+                final_audio = CompositeAudioClip([final_clip.audio.volumex(0.7), audio_clip.volumex(0.3)])
+            else:
+                # CompositeAudioClip이 없으면 배경음악만 사용
+                final_audio = audio_clip
+        else:
+            final_audio = audio_clip
+        
+        final_clip = final_clip.set_audio(final_audio)
+        audio_clip.close()
+    
+    # 4단계: 자막 추가 (있는 경우)
+    if subtitles:
+        video_clips = [final_clip]
+        
+        for subtitle in subtitles:
+            txt_clip = TextClip(subtitle['text'], 
+                               fontsize=50, 
+                               color='white', 
+                               font='Arial-Bold',
+                               stroke_color='black',
+                               stroke_width=2)
+            
+            # 자막 위치와 시간 설정
+            txt_clip = txt_clip.set_position(('center', 'bottom')).set_duration(
+                subtitle['end_time'] - subtitle['start_time']
+            ).set_start(subtitle['start_time'])
+            
+            video_clips.append(txt_clip)
+        
+        final_clip = CompositeVideoClip(video_clips)
+    
+    # 5단계: 출력 품질 설정
+    codec_settings = {
+        'low': {'bitrate': '500k'},
+        'medium': {'bitrate': '1000k'},
+        'high': {'bitrate': '2000k'}
+    }
+    
+    bitrate = codec_settings.get(output_quality, codec_settings['medium'])['bitrate']
+    
+    # 출력 파일명 생성
+    safe_title = "".join(c for c in video_title if c.isalnum() or c in (' ', '-', '_')).rstrip()[:20]
+    if not safe_title:
+        safe_title = "Final_Video"
+    
+    output_filename = f"{safe_title}_{uuid.uuid4().hex[:8]}.mp4"
+    output_path = os.path.join(app.config['OUTPUT_FOLDER'], output_filename)
+    
+    # 비디오 저장
+    final_clip.write_videofile(
+        output_path, 
+        codec='libx264', 
+        audio_codec='aac',
+        bitrate=bitrate,
+        temp_audiofile=f'temp-audio-{uuid.uuid4().hex[:8]}.m4a'
+    )
+    
+    # 메모리 정리
+    for clip in clips:
+        clip.close()
+    final_clip.close()
+    
+    return jsonify({
+        'message': f'"{video_title}" 최종 영상이 성공적으로 생성되었습니다',
         'output_file': output_filename
     })
 
