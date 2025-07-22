@@ -579,11 +579,25 @@ def create_final_video_with_progress(data, task_id):
         
         # 출력 설정
         codec_settings = {
-            'low': {'bitrate': '500k'},
-            'medium': {'bitrate': '1000k'},
-            'high': {'bitrate': '2000k'}
+            '480p': {'width': 854, 'height': 480, 'bitrate': '1000k'},
+            '720p': {'width': 1280, 'height': 720, 'bitrate': '2500k'},
+            '1080p': {'width': 1920, 'height': 1080, 'bitrate': '5000k'},
+            'custom': {'bitrate': '3000k'}  # 사용자 정의는 기본 비트레이트만
         }
-        bitrate = codec_settings.get(output_quality, codec_settings['medium'])['bitrate']
+        
+        output_setting = codec_settings.get(output_quality, codec_settings['720p'])
+        
+        # 사용자 정의 해상도 처리
+        if output_quality == 'custom' and 'custom_resolution' in data:
+            custom_res = data['custom_resolution']
+            output_setting['width'] = custom_res['width']
+            output_setting['height'] = custom_res['height']
+        
+        # 해상도 조정이 필요한 경우 적용
+        if 'width' in output_setting and 'height' in output_setting:
+            final_clip = final_clip.resized((output_setting['width'], output_setting['height']))
+        
+        bitrate = output_setting['bitrate']
         
         safe_title = "".join(c for c in video_title if c.isalnum() or c in (' ', '-', '_')).rstrip()[:20]
         if not safe_title:
@@ -857,7 +871,8 @@ def add_subtitle_to_video_with_progress(data, task_id):
         task_manager.set_status(task_id, 'error', f'오류가 발생했습니다: {str(e)}')
 
 # 기존 함수들 (호환성을 위해 유지)
-def concatenate_media(data):
+def create_final_video(data):
+    files = data.get('files', [])
     audio_file = data.get('audio_file')
     audio_volume = data.get('audio_volume', 50)
     subtitles = data.get('subtitles', [])

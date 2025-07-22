@@ -277,6 +277,108 @@
 
         .connected { background: #28a745; }
         .disconnected { background: #dc3545; }
+
+        /* 워크플로우 스타일 */
+        .workflow-step {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 20px;
+            margin: 20px 0;
+            border-left: 4px solid #007bff;
+            transition: all 0.3s ease;
+        }
+
+        .workflow-step:hover {
+            box-shadow: 0 5px 15px rgba(0, 123, 255, 0.1);
+            transform: translateY(-2px);
+        }
+
+        .workflow-step h4 {
+            color: #007bff;
+            margin-bottom: 15px;
+            font-size: 18px;
+        }
+
+        .subtitle-item {
+            background: white;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 10px 0;
+            border: 1px solid #dee2e6;
+            position: relative;
+        }
+
+        .subtitle-item:hover {
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .subtitle-controls {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .subtitle-time-inputs {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            margin: 10px 0;
+        }
+
+        .subtitle-time-inputs input {
+            width: 80px;
+        }
+
+        .remove-subtitle {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: #dc3545;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 25px;
+            height: 25px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .video-preview {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin: 15px 0;
+        }
+
+        .video-preview-item {
+            background: white;
+            border-radius: 8px;
+            padding: 10px;
+            border: 2px solid #dee2e6;
+            text-align: center;
+            min-width: 120px;
+        }
+
+        .video-preview-item.image {
+            border-color: #ffc107;
+        }
+
+        .video-preview-item.video {
+            border-color: #28a745;
+        }
+
+        .checkbox-label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: bold;
+            color: #333;
+            cursor: pointer;
+        }
+
+        .checkbox-label input[type="checkbox"] {
+            transform: scale(1.2);
+        }
     </style>
 </head>
 <body>
@@ -322,74 +424,96 @@
             </div>
         </div>
 
-        <!-- 비디오 처리 섹션 -->
+        <!-- 통합 비디오 제작 워크플로우 -->
         <div class="processing-section">
-            <h3>🎥 비디오 처리</h3>
+            <h3>� 영상 제작 워크플로우</h3>
+            <p style="color: #666; margin-bottom: 25px;">
+                업로드한 영상들을 하나로 합치고, 배경음악과 자막을 추가해서 완성된 영상을 만들어보세요!
+            </p>
             
-            <div class="form-group">
-                <label>작업 유형</label>
-                <select id="operationType" class="form-control" onchange="updateFormFields()">
-                    <option value="concatenate">영상/이미지 합치기</option>
-                    <option value="add_audio">배경음악 추가</option>
-                    <option value="add_subtitle">자막 추가</option>
-                    <option value="create_final_video">최종 영상 제작</option>
-                </select>
-            </div>
-
-            <!-- 배경음악 설정 -->
-            <div id="audioSettings" style="display: none;">
-                <div class="form-group">
-                    <label>배경음악 파일</label>
-                    <select id="audioFile" class="form-control">
-                        <option value="">음악 파일을 선택하세요</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>음량 (0-100)</label>
-                    <input type="range" id="audioVolume" class="form-control" min="0" max="100" value="50">
-                    <span id="volumeValue">50</span>
+            <!-- Step 1: 영상 선택 및 순서 -->
+            <div class="workflow-step">
+                <h4>📹 Step 1: 영상 선택 및 순서</h4>
+                <div id="videoSelection">
+                    <p style="color: #666;">업로드된 영상/이미지 파일들이 자동으로 순서대로 합쳐집니다.</p>
+                    <div id="selectedVideos"></div>
                 </div>
             </div>
 
-            <!-- 자막 설정 -->
-            <div id="subtitleSettings" style="display: none;">
+            <!-- Step 2: 배경음악 설정 -->
+            <div class="workflow-step">
+                <h4>🎵 Step 2: 배경음악 설정 (선택사항)</h4>
                 <div class="form-group">
-                    <label>비디오 파일</label>
-                    <select id="videoFile" class="form-control">
-                        <option value="">비디오 파일을 선택하세요</option>
-                    </select>
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="enableBackgroundMusic" onchange="toggleBackgroundMusic()"> 
+                        배경음악 사용
+                    </label>
                 </div>
-                <div class="form-group">
-                    <label>자막 텍스트</label>
-                    <textarea id="subtitleText" class="form-control" rows="3" placeholder="자막 내용을 입력하세요"></textarea>
-                </div>
-                <div class="form-group">
-                    <label>시작 시간 (초)</label>
-                    <input type="number" id="startTime" class="form-control" value="0" min="0" step="0.1">
-                </div>
-                <div class="form-group">
-                    <label>종료 시간 (초)</label>
-                    <input type="number" id="endTime" class="form-control" value="5" min="0" step="0.1">
+                <div id="backgroundMusicSettings" style="display: none;">
+                    <div class="form-group">
+                        <label>배경음악 파일</label>
+                        <select id="audioFile" class="form-control">
+                            <option value="">음악 파일을 선택하세요</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>음량 조절</label>
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <input type="range" id="audioVolume" class="form-control" min="0" max="100" value="30" style="flex: 1;">
+                            <span id="volumeValue" style="min-width: 40px;">30</span>%
+                        </div>
+                        <small style="color: #666;">원본 영상 소리와 섞여서 재생됩니다</small>
+                    </div>
                 </div>
             </div>
 
-            <!-- 최종 영상 설정 -->
-            <div id="finalVideoSettings" style="display: none;">
+            <!-- Step 3: 자막 추가 -->
+            <div class="workflow-step">
+                <h4>💬 Step 3: 자막 추가 (선택사항)</h4>
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="enableSubtitles" onchange="toggleSubtitles()"> 
+                        자막 사용
+                    </label>
+                </div>
+                <div id="subtitleSettings" style="display: none;">
+                    <div id="subtitlesList">
+                        <!-- 자막 리스트가 여기에 표시됩니다 -->
+                    </div>
+                    <button type="button" onclick="addSubtitle()" class="btn" style="background: #17a2b8;">➕ 자막 추가</button>
+                </div>
+            </div>
+
+            <!-- Step 4: 최종 설정 및 내보내기 -->
+            <div class="workflow-step">
+                <h4>⚙️ Step 4: 최종 설정 및 내보내기</h4>
                 <div class="form-group">
                     <label>영상 제목</label>
-                    <input type="text" id="videoTitle" class="form-control" value="Final Video" placeholder="영상 제목을 입력하세요">
+                    <input type="text" id="videoTitle" class="form-control" value="My_Video" placeholder="영상 파일명을 입력하세요">
                 </div>
                 <div class="form-group">
-                    <label>출력 품질</label>
+                    <label>해상도 및 품질</label>
                     <select id="outputQuality" class="form-control">
-                        <option value="low">낮음 (500k)</option>
-                        <option value="medium" selected>보통 (1000k)</option>
-                        <option value="high">높음 (2000k)</option>
+                        <option value="480p">480p (SD) - 빠른 처리</option>
+                        <option value="720p" selected>720p (HD) - 권장</option>
+                        <option value="1080p">1080p (Full HD) - 고품질</option>
+                        <option value="custom">사용자 정의</option>
                     </select>
+                </div>
+                <div id="customResolution" style="display: none;">
+                    <div style="display: flex; gap: 10px;">
+                        <input type="number" id="customWidth" class="form-control" placeholder="너비" value="1920">
+                        <span style="align-self: center;">×</span>
+                        <input type="number" id="customHeight" class="form-control" placeholder="높이" value="1080">
+                    </div>
                 </div>
             </div>
 
-            <button onclick="processVideo()" class="btn" id="processBtn">🚀 처리 시작</button>
+            <div style="text-align: center; margin-top: 30px;">
+                <button onclick="createFinalVideo()" class="btn" id="processBtn" style="font-size: 18px; padding: 15px 30px;">
+                    🎬 완성된 영상 만들기
+                </button>
+            </div>
         </div>
 
         <!-- 결과 표시 -->
@@ -400,6 +524,8 @@
         let socket;
         let currentTaskId = null;
         let uploadedFiles = [];
+        let subtitles = [];
+        let subtitleCounter = 0;
 
         // 소켓 연결
         function initSocket() {
@@ -573,6 +699,7 @@
             const container = document.getElementById('filesContainer');
             if (uploadedFiles.length === 0) {
                 container.innerHTML = '<p style="color: #666;">업로드된 파일이 없습니다.</p>';
+                updateVideoSelection();
                 return;
             }
 
@@ -585,6 +712,39 @@
                     <button onclick="removeFile('${file.filename}')" class="btn btn-danger">삭제</button>
                 </div>
             `).join('');
+            
+            updateVideoSelection();
+        }
+
+        // 비디오 선택 영역 업데이트
+        function updateVideoSelection() {
+            const container = document.getElementById('selectedVideos');
+            const videoFiles = uploadedFiles.filter(f => f.type === 'video' || f.type === 'image');
+            
+            if (videoFiles.length === 0) {
+                container.innerHTML = '<p style="color: #666;">업로드된 영상/이미지 파일이 없습니다.</p>';
+                return;
+            }
+
+            container.innerHTML = `
+                <div class="video-preview">
+                    ${videoFiles.map((file, index) => `
+                        <div class="video-preview-item ${file.type}">
+                            <div style="font-size: 24px; margin-bottom: 5px;">
+                                ${file.type === 'video' ? '🎥' : '🖼️'}
+                            </div>
+                            <div style="font-size: 12px; font-weight: bold;">
+                                ${index + 1}. ${file.original_name.length > 15 ? 
+                                    file.original_name.substring(0, 15) + '...' : 
+                                    file.original_name}
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+                <p style="color: #666; font-size: 14px; margin-top: 10px;">
+                    총 ${videoFiles.length}개의 파일이 순서대로 합쳐집니다.
+                </p>
+            `;
         }
 
         // 파일 삭제
@@ -592,6 +752,70 @@
             uploadedFiles = uploadedFiles.filter(file => file.filename !== filename);
             updateFilesList();
             updateFileSelectors();
+        }
+
+        // 배경음악 토글
+        function toggleBackgroundMusic() {
+            const enabled = document.getElementById('enableBackgroundMusic').checked;
+            const settings = document.getElementById('backgroundMusicSettings');
+            settings.style.display = enabled ? 'block' : 'none';
+        }
+
+        // 자막 토글
+        function toggleSubtitles() {
+            const enabled = document.getElementById('enableSubtitles').checked;
+            const settings = document.getElementById('subtitleSettings');
+            settings.style.display = enabled ? 'block' : 'none';
+        }
+
+        // 자막 추가
+        function addSubtitle() {
+            subtitleCounter++;
+            const subtitleId = `subtitle_${subtitleCounter}`;
+            const subtitleHtml = `
+                <div class="subtitle-item" id="${subtitleId}">
+                    <button class="remove-subtitle" onclick="removeSubtitle('${subtitleId}')">×</button>
+                    <div class="form-group">
+                        <label>자막 내용</label>
+                        <textarea class="form-control subtitle-text" rows="2" placeholder="자막 내용을 입력하세요"></textarea>
+                    </div>
+                    <div class="subtitle-time-inputs">
+                        <label>시작:</label>
+                        <input type="number" class="form-control subtitle-start" value="0" min="0" step="0.1">초
+                        <label>종료:</label>
+                        <input type="number" class="form-control subtitle-end" value="3" min="0" step="0.1">초
+                    </div>
+                </div>
+            `;
+            
+            document.getElementById('subtitlesList').insertAdjacentHTML('beforeend', subtitleHtml);
+        }
+
+        // 자막 제거
+        function removeSubtitle(subtitleId) {
+            document.getElementById(subtitleId).remove();
+        }
+
+        // 모든 자막 수집
+        function collectSubtitles() {
+            const subtitleItems = document.querySelectorAll('.subtitle-item');
+            const collectedSubtitles = [];
+            
+            subtitleItems.forEach(item => {
+                const text = item.querySelector('.subtitle-text').value.trim();
+                const startTime = parseFloat(item.querySelector('.subtitle-start').value);
+                const endTime = parseFloat(item.querySelector('.subtitle-end').value);
+                
+                if (text && endTime > startTime) {
+                    collectedSubtitles.push({
+                        text: text,
+                        start_time: startTime,
+                        end_time: endTime
+                    });
+                }
+            });
+            
+            return collectedSubtitles;
         }
 
         // 파일 선택기 업데이트
@@ -612,62 +836,63 @@
             });
         }
 
-        // 폼 필드 업데이트
-        function updateFormFields() {
-            const operationType = document.getElementById('operationType').value;
-            const audioSettings = document.getElementById('audioSettings');
-            const subtitleSettings = document.getElementById('subtitleSettings');
-            const finalVideoSettings = document.getElementById('finalVideoSettings');
-            
-            // 모든 설정 숨기기
-            audioSettings.style.display = 'none';
-            subtitleSettings.style.display = 'none';
-            finalVideoSettings.style.display = 'none';
-            
-            // 선택된 작업에 따라 필요한 설정 표시
-            if (operationType === 'add_audio' || operationType === 'create_final_video') {
-                audioSettings.style.display = 'block';
-            }
-            if (operationType === 'add_subtitle') {
-                subtitleSettings.style.display = 'block';
-            }
-            if (operationType === 'create_final_video') {
-                finalVideoSettings.style.display = 'block';
-            }
+        // 해상도 선택 업데이트
+        function updateResolutionSettings() {
+            const quality = document.getElementById('outputQuality').value;
+            const customDiv = document.getElementById('customResolution');
+            customDiv.style.display = quality === 'custom' ? 'block' : 'none';
         }
 
-        // 비디오 처리
-        function processVideo() {
-            const operationType = document.getElementById('operationType').value;
+        // 통합 비디오 제작
+        function createFinalVideo() {
+            const videoFiles = uploadedFiles.filter(f => f.type === 'video' || f.type === 'image');
             
-            if (uploadedFiles.length === 0) {
-                alert('먼저 파일을 업로드해주세요.');
+            if (videoFiles.length === 0) {
+                alert('먼저 영상 또는 이미지 파일을 업로드해주세요.');
+                return;
+            }
+
+            const videoTitle = document.getElementById('videoTitle').value.trim();
+            if (!videoTitle) {
+                alert('영상 제목을 입력해주세요.');
                 return;
             }
 
             const data = {
-                operation: operationType,
-                files: uploadedFiles.filter(f => f.type === 'video' || f.type === 'image')
+                operation: 'create_final_video',
+                files: videoFiles,
+                video_title: videoTitle,
+                output_quality: document.getElementById('outputQuality').value
             };
 
-            // 작업별 추가 데이터
-            if (operationType === 'add_audio' || operationType === 'create_final_video') {
-                data.audio_file = document.getElementById('audioFile').value;
-                data.audio_volume = parseInt(document.getElementById('audioVolume').value);
+            // 배경음악 설정
+            const enableMusic = document.getElementById('enableBackgroundMusic').checked;
+            if (enableMusic) {
+                const audioFile = document.getElementById('audioFile').value;
+                if (audioFile) {
+                    data.audio_file = audioFile;
+                    data.audio_volume = parseInt(document.getElementById('audioVolume').value);
+                }
             }
-            
-            if (operationType === 'add_subtitle') {
-                data.video_file = document.getElementById('videoFile').value;
-                data.subtitle_text = document.getElementById('subtitleText').value;
-                data.start_time = parseFloat(document.getElementById('startTime').value);
-                data.end_time = parseFloat(document.getElementById('endTime').value);
-            }
-            
-            if (operationType === 'create_final_video') {
-                data.video_title = document.getElementById('videoTitle').value;
-                data.output_quality = document.getElementById('outputQuality').value;
-                // 자막 데이터 추가 (향후 확장 가능)
+
+            // 자막 설정
+            const enableSubs = document.getElementById('enableSubtitles').checked;
+            if (enableSubs) {
+                data.subtitles = collectSubtitles();
+            } else {
                 data.subtitles = [];
+            }
+
+            // 해상도 설정
+            if (data.output_quality === 'custom') {
+                const width = parseInt(document.getElementById('customWidth').value);
+                const height = parseInt(document.getElementById('customHeight').value);
+                if (width && height && width > 0 && height > 0) {
+                    data.custom_resolution = { width: width, height: height };
+                } else {
+                    alert('사용자 정의 해상도를 올바르게 입력해주세요.');
+                    return;
+                }
             }
 
             // 요청 전송
@@ -687,8 +912,9 @@
                     disableProcessButton();
                     document.getElementById('results').innerHTML = `
                         <div class="alert alert-info">
-                            <h4>📡 ${data.message}</h4>
+                            <h4>🎬 ${data.message}</h4>
                             <p>작업 ID: ${data.task_id}</p>
+                            <p>영상 제작이 시작되었습니다. 진행상황을 확인해주세요!</p>
                         </div>
                     `;
                 }
@@ -702,13 +928,13 @@
         function disableProcessButton() {
             const btn = document.getElementById('processBtn');
             btn.disabled = true;
-            btn.textContent = '⏳ 처리 중...';
+            btn.textContent = '⏳ 영상 제작 중...';
         }
 
         function enableProcessButton() {
             const btn = document.getElementById('processBtn');
             btn.disabled = false;
-            btn.textContent = '🚀 처리 시작';
+            btn.textContent = '🎬 완성된 영상 만들기';
         }
 
         // 볼륨 슬라이더 이벤트
@@ -716,10 +942,13 @@
             document.getElementById('volumeValue').textContent = this.value;
         });
 
+        // 해상도 선택 이벤트
+        document.getElementById('outputQuality').addEventListener('change', updateResolutionSettings);
+
         // 초기화
         window.onload = function() {
             initSocket();
-            updateFormFields();
+            updateResolutionSettings();
             
             // 기존 파일 목록 로드
             fetch('/files')
