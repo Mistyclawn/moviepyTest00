@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MoviePy 웹 비디오 에디터</title>
+    <title>MoviePy 웹 비디오 에디터 - 진행상황 추적</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
     <style>
         * {
             margin: 0;
@@ -49,792 +50,688 @@
             background: #e3f2fd;
         }
 
-        .upload-area {
-            text-align: center;
-            padding: 20px;
-        }
-
         .file-input {
-            display: none;
-        }
-
-        .upload-btn {
-            background: linear-gradient(45deg, #007bff, #0056b3);
-            color: white;
-            padding: 12px 30px;
-            border: none;
-            border-radius: 25px;
-            cursor: pointer;
-            font-size: 16px;
-            font-weight: bold;
-            transition: all 0.3s ease;
-            box-shadow: 0 4px 15px rgba(0, 123, 255, 0.3);
-        }
-
-        .upload-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(0, 123, 255, 0.4);
-        }
-
-        .file-list {
-            margin-top: 20px;
-        }
-
-        .file-item {
-            background: white;
-            margin: 10px 0;
-            padding: 15px;
-            border-radius: 10px;
-            border-left: 4px solid #007bff;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .file-info {
-            display: flex;
-            align-items: center;
-            gap: 15px;
-        }
-
-        .file-type {
-            padding: 5px 10px;
-            border-radius: 15px;
-            font-size: 12px;
-            font-weight: bold;
-            text-transform: uppercase;
-        }
-
-        .file-type.video {
-            background: #e3f2fd;
-            color: #1976d2;
-        }
-
-        .file-type.image {
-            background: #f3e5f5;
-            color: #7b1fa2;
-        }
-
-        .file-type.audio {
-            background: #e8f5e8;
-            color: #388e3c;
-        }
-
-        .operation-section {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 20px;
-            margin-bottom: 30px;
-        }
-
-        .workflow-section {
-            margin-bottom: 30px;
-        }
-
-        .step-card {
-            background: white;
-            border-radius: 15px;
-            padding: 25px;
-            margin-bottom: 20px;
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
-            border-left: 4px solid #007bff;
-        }
-
-        .final-step {
-            border-left-color: #28a745;
-            background: linear-gradient(135deg, #f8fff8 0%, #f0fff0 100%);
-        }
-
-        .sortable-list {
-            min-height: 100px;
-            border: 2px dashed #ddd;
-            border-radius: 8px;
-            padding: 15px;
-            background: #fafafa;
-        }
-
-        .sortable-item {
-            background: white;
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            padding: 15px;
-            margin: 10px 0;
-            cursor: move;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            transition: all 0.3s ease;
-        }
-
-        .sortable-item:hover {
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-        }
-
-        .sortable-item.dragging {
-            opacity: 0.5;
-        }
-
-        .item-info {
-            display: flex;
-            align-items: center;
-            gap: 15px;
-        }
-
-        .drag-handle {
-            font-size: 20px;
-            color: #666;
-            cursor: grab;
-        }
-
-        .drag-handle:active {
-            cursor: grabbing;
-        }
-
-        .duration-input {
-            width: 80px;
-            padding: 5px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-        }
-
-        .empty-message {
-            text-align: center;
-            color: #999;
-            font-style: italic;
-        }
-
-        .subtitle-track {
-            background: #f8f9fa;
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            padding: 15px;
-            margin: 10px 0;
-        }
-
-        .subtitle-controls {
-            display: grid;
-            grid-template-columns: 1fr 1fr 1fr auto;
-            gap: 10px;
-            align-items: center;
-        }
-
-        .add-subtitle-btn {
-            background: #17a2b8;
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 5px;
-            cursor: pointer;
-            font-weight: bold;
-        }
-
-        .remove-subtitle-btn {
-            background: #dc3545;
-            color: white;
-            border: none;
-            padding: 5px 10px;
-            border-radius: 3px;
-            cursor: pointer;
-        }
-
-        .create-video-btn {
-            background: linear-gradient(45deg, #28a745, #20c997);
-            color: white;
-            padding: 15px 30px;
-            border: none;
-            border-radius: 25px;
-            cursor: pointer;
-            font-size: 18px;
-            font-weight: bold;
             width: 100%;
-            transition: all 0.3s ease;
-            box-shadow: 0 4px 15px rgba(40, 167, 69, 0.3);
-        }
-
-        .create-video-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(40, 167, 69, 0.4);
-        }
-
-        .final-settings {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 15px;
-            margin-bottom: 20px;
-        }
-
-        .operation-card {
-            background: white;
-            border-radius: 15px;
-            padding: 25px;
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
-            border-top: 4px solid #28a745;
-        }
-
-        .operation-card h3 {
-            color: #333;
-            margin-bottom: 15px;
-            font-size: 1.3em;
-        }
-
-        .form-group {
-            margin-bottom: 15px;
-        }
-
-        .form-group label {
-            display: block;
-            margin-bottom: 5px;
-            font-weight: bold;
-            color: #555;
-        }
-
-        .form-group select,
-        .form-group input,
-        .form-group textarea {
-            width: 100%;
-            padding: 10px;
+            padding: 15px;
             border: 2px solid #ddd;
-            border-radius: 8px;
-            font-size: 14px;
+            border-radius: 10px;
+            font-size: 16px;
+            margin-bottom: 15px;
             transition: border-color 0.3s ease;
         }
 
-        .form-group select:focus,
-        .form-group input:focus,
-        .form-group textarea:focus {
+        .file-input:focus {
             outline: none;
             border-color: #007bff;
-            box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
         }
 
-        .process-btn {
-            background: linear-gradient(45deg, #28a745, #20c997);
+        .btn {
+            background: linear-gradient(45deg, #007bff, #0056b3);
             color: white;
-            padding: 12px 25px;
             border: none;
-            border-radius: 25px;
+            padding: 12px 25px;
+            border-radius: 8px;
             cursor: pointer;
-            font-size: 14px;
-            font-weight: bold;
-            width: 100%;
+            font-size: 16px;
             transition: all 0.3s ease;
-            box-shadow: 0 4px 15px rgba(40, 167, 69, 0.3);
+            margin: 5px;
         }
 
-        .process-btn:hover {
+        .btn:hover {
             transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(40, 167, 69, 0.4);
+            box-shadow: 0 5px 15px rgba(0, 123, 255, 0.3);
         }
 
-        .process-btn:disabled {
+        .btn:disabled {
             background: #6c757d;
             cursor: not-allowed;
             transform: none;
             box-shadow: none;
         }
 
-        .progress {
-            margin-top: 20px;
+        .btn-success { background: linear-gradient(45deg, #28a745, #1e7e34); }
+        .btn-warning { background: linear-gradient(45deg, #ffc107, #e0a800); }
+        .btn-danger { background: linear-gradient(45deg, #dc3545, #c82333); }
+
+        /* 진행상황 표시 */
+        .progress-container {
+            display: none;
+            background: #f8f9fa;
+            border-radius: 15px;
+            padding: 25px;
+            margin: 20px 0;
+            border-left: 5px solid #007bff;
         }
 
         .progress-bar {
             width: 100%;
-            height: 8px;
+            height: 30px;
             background: #e9ecef;
-            border-radius: 4px;
+            border-radius: 15px;
             overflow: hidden;
+            margin: 15px 0;
         }
 
         .progress-fill {
             height: 100%;
-            background: linear-gradient(45deg, #007bff, #0056b3);
+            background: linear-gradient(45deg, #28a745, #20c997);
             width: 0%;
             transition: width 0.3s ease;
+            position: relative;
+            overflow: hidden;
         }
 
-        .result-section {
+        .progress-fill::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            bottom: 0;
+            right: 0;
+            background-image: linear-gradient(
+                -45deg,
+                rgba(255, 255, 255, .2) 25%,
+                transparent 25%,
+                transparent 50%,
+                rgba(255, 255, 255, .2) 50%,
+                rgba(255, 255, 255, .2) 75%,
+                transparent 75%,
+                transparent
+            );
+            background-size: 50px 50px;
+            animation: move 2s linear infinite;
+        }
+
+        @keyframes move {
+            0% { background-position: 0 0; }
+            100% { background-position: 50px 50px; }
+        }
+
+        .progress-text {
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .progress-details {
+            display: flex;
+            justify-content: space-between;
+            color: #666;
+            font-size: 14px;
+            margin-top: 10px;
+        }
+
+        .task-controls {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+
+        .status-running { background: #28a745; }
+        .status-paused { background: #ffc107; }
+        .status-completed { background: #007bff; }
+        .status-error { background: #dc3545; }
+        .status-cancelled { background: #6c757d; }
+
+        .files-list {
             background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+
+        .file-item {
+            background: white;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 10px 0;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .processing-section {
+            background: #fff;
             border-radius: 15px;
             padding: 25px;
-            margin-top: 30px;
+            margin: 20px 0;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
         }
 
-        .download-btn {
-            background: linear-gradient(45deg, #dc3545, #c82333);
-            color: white;
-            padding: 12px 25px;
-            border: none;
-            border-radius: 25px;
-            cursor: pointer;
-            font-size: 14px;
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
             font-weight: bold;
-            text-decoration: none;
-            display: inline-block;
-            transition: all 0.3s ease;
-            box-shadow: 0 4px 15px rgba(220, 53, 69, 0.3);
+            color: #333;
         }
 
-        .download-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(220, 53, 69, 0.4);
-            text-decoration: none;
-            color: white;
+        .form-control {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 16px;
         }
 
-        .message {
+        .form-control:focus {
+            outline: none;
+            border-color: #007bff;
+        }
+
+        select.form-control {
+            height: 42px;
+        }
+
+        .alert {
             padding: 15px;
             border-radius: 8px;
-            margin: 10px 0;
-            font-weight: bold;
+            margin: 15px 0;
         }
 
-        .message.success {
+        .alert-success {
             background: #d4edda;
             color: #155724;
             border: 1px solid #c3e6cb;
         }
 
-        .message.error {
+        .alert-error {
             background: #f8d7da;
             color: #721c24;
             border: 1px solid #f5c6cb;
         }
 
-        .loading {
-            display: none;
-            text-align: center;
-            padding: 20px;
+        .alert-info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
         }
 
-        .spinner {
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid #007bff;
-            border-radius: 50%;
-            width: 40px;
-            height: 40px;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 10px;
+        .estimated-time {
+            font-style: italic;
+            color: #666;
         }
 
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+        .connection-status {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 10px 15px;
+            border-radius: 20px;
+            color: white;
+            font-weight: bold;
+            z-index: 1000;
         }
 
-        .time-inputs {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 10px;
-        }
+        .connected { background: #28a745; }
+        .disconnected { background: #dc3545; }
     </style>
 </head>
 <body>
+    <div class="connection-status" id="connectionStatus">연결 중...</div>
+    
     <div class="container">
         <h1>🎬 MoviePy 웹 비디오 에디터</h1>
-        
+        <p style="text-align: center; color: #666; margin-bottom: 30px;">
+            실시간 진행상황 추적과 함께 비디오를 편집하세요
+        </p>
+
         <!-- 파일 업로드 섹션 -->
         <div class="upload-section">
-            <div class="upload-area">
-                <h3>파일 업로드</h3>
-                <p>비디오, 이미지, 오디오 파일을 업로드하세요</p>
-                <input type="file" id="fileInput" class="file-input" multiple 
-                       accept=".mp4,.avi,.mov,.mkv,.webm,.jpg,.jpeg,.png,.gif,.bmp,.mp3,.wav,.aac,.m4a,.ogg">
-                <button class="upload-btn" onclick="document.getElementById('fileInput').click()">
-                    📁 파일 선택
-                </button>
-            </div>
-            
-            <div class="file-list" id="fileList">
-                <!-- 업로드된 파일 목록이 여기에 표시됩니다 -->
+            <h3>📁 파일 업로드</h3>
+            <input type="file" id="fileInput" class="file-input" accept="video/*,image/*,audio/*" multiple>
+            <button onclick="uploadFiles()" class="btn">파일 업로드</button>
+        </div>
+
+        <!-- 업로드된 파일 목록 -->
+        <div class="files-list" id="filesList">
+            <h3>📋 업로드된 파일</h3>
+            <div id="filesContainer">
+                <p style="color: #666;">업로드된 파일이 없습니다.</p>
             </div>
         </div>
 
-        <!-- 작업 섹션 -->
-        <div class="workflow-section">
-            <!-- 1단계: 파일 순서 배치 -->
-            <div class="step-card">
-                <h3>🎞️ 1단계: 비디오/이미지 순서 배치</h3>
-                <div class="sortable-list" id="sortableFiles">
-                    <p class="empty-message">파일을 업로드하면 여기에 표시됩니다.</p>
-                </div>
+        <!-- 진행상황 표시 -->
+        <div class="progress-container" id="progressContainer">
+            <h3>⏳ 작업 진행상황</h3>
+            <div class="progress-text" id="progressText">작업을 시작합니다...</div>
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+            <div class="progress-details">
+                <span id="progressPercent">0%</span>
+                <span id="progressStep">0 / 100</span>
+                <span class="estimated-time" id="estimatedTime">예상 시간 계산 중...</span>
+            </div>
+            <div class="task-controls">
+                <button onclick="pauseTask()" class="btn btn-warning" id="pauseBtn">⏸️ 일시정지</button>
+                <button onclick="resumeTask()" class="btn btn-success" id="resumeBtn" style="display: none;">▶️ 재개</button>
+                <button onclick="cancelTask()" class="btn btn-danger" id="cancelBtn">❌ 취소</button>
+            </div>
+        </div>
+
+        <!-- 비디오 처리 섹션 -->
+        <div class="processing-section">
+            <h3>🎥 비디오 처리</h3>
+            
+            <div class="form-group">
+                <label>작업 유형</label>
+                <select id="operationType" class="form-control" onchange="updateFormFields()">
+                    <option value="concatenate">영상/이미지 합치기</option>
+                    <option value="add_audio">배경음악 추가</option>
+                    <option value="add_subtitle">자막 추가</option>
+                    <option value="create_final_video">최종 영상 제작</option>
+                </select>
             </div>
 
-            <!-- 2단계: 배경음악 선택 -->
-            <div class="step-card">
-                <h3>🎵 2단계: 배경음악 선택</h3>
+            <!-- 배경음악 설정 -->
+            <div id="audioSettings" style="display: none;">
                 <div class="form-group">
-                    <label>배경음악:</label>
-                    <select id="finalAudioSelect">
-                        <option value="">배경음악 없음</option>
+                    <label>배경음악 파일</label>
+                    <select id="audioFile" class="form-control">
+                        <option value="">음악 파일을 선택하세요</option>
                     </select>
                 </div>
                 <div class="form-group">
-                    <label>음량 조절:</label>
-                    <input type="range" id="audioVolume" min="0" max="100" value="50">
-                    <span id="volumeLabel">50%</span>
+                    <label>음량 (0-100)</label>
+                    <input type="range" id="audioVolume" class="form-control" min="0" max="100" value="50">
+                    <span id="volumeValue">50</span>
                 </div>
             </div>
 
-            <!-- 3단계: 자막 설정 -->
-            <div class="step-card">
-                <h3>💬 3단계: 자막 설정</h3>
-                <div id="subtitleSettings">
-                    <button class="add-subtitle-btn" onclick="addSubtitleTrack()">+ 자막 추가</button>
+            <!-- 자막 설정 -->
+            <div id="subtitleSettings" style="display: none;">
+                <div class="form-group">
+                    <label>비디오 파일</label>
+                    <select id="videoFile" class="form-control">
+                        <option value="">비디오 파일을 선택하세요</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>자막 텍스트</label>
+                    <textarea id="subtitleText" class="form-control" rows="3" placeholder="자막 내용을 입력하세요"></textarea>
+                </div>
+                <div class="form-group">
+                    <label>시작 시간 (초)</label>
+                    <input type="number" id="startTime" class="form-control" value="0" min="0" step="0.1">
+                </div>
+                <div class="form-group">
+                    <label>종료 시간 (초)</label>
+                    <input type="number" id="endTime" class="form-control" value="5" min="0" step="0.1">
                 </div>
             </div>
 
-            <!-- 4단계: 최종 제작 -->
-            <div class="step-card final-step">
-                <h3>🎬 4단계: 영상 제작</h3>
-                <div class="final-settings">
-                    <div class="form-group">
-                        <label>출력 품질:</label>
-                        <select id="outputQuality">
-                            <option value="720p">720p (HD)</option>
-                            <option value="1080p" selected>1080p (Full HD)</option>
-                            <option value="480p">480p (SD)</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>영상 제목:</label>
-                        <input type="text" id="videoTitle" placeholder="내 영상" value="내 영상">
-                    </div>
+            <!-- 최종 영상 설정 -->
+            <div id="finalVideoSettings" style="display: none;">
+                <div class="form-group">
+                    <label>영상 제목</label>
+                    <input type="text" id="videoTitle" class="form-control" value="Final Video" placeholder="영상 제목을 입력하세요">
                 </div>
-                <button class="create-video-btn" onclick="createFinalVideo()">🎥 영상 제작하기</button>
-                <div class="loading" id="finalLoading">
-                    <div class="spinner"></div>
-                    <p>영상을 제작하는 중... 잠시만 기다려주세요.</p>
-                    <div class="progress-bar">
-                        <div class="progress-fill" id="progressFill"></div>
-                    </div>
+                <div class="form-group">
+                    <label>출력 품질</label>
+                    <select id="outputQuality" class="form-control">
+                        <option value="low">낮음 (500k)</option>
+                        <option value="medium" selected>보통 (1000k)</option>
+                        <option value="high">높음 (2000k)</option>
+                    </select>
                 </div>
             </div>
+
+            <button onclick="processVideo()" class="btn" id="processBtn">🚀 처리 시작</button>
         </div>
 
-        <!-- 결과 섹션 -->
-        <div class="result-section" id="resultSection" style="display: none;">
-            <h3>🎉 처리 완료</h3>
-            <div id="resultMessage"></div>
-            <div id="downloadLink"></div>
-        </div>
-
-        <!-- 메시지 표시 영역 -->
-        <div id="messageArea"></div>
+        <!-- 결과 표시 -->
+        <div id="results"></div>
     </div>
 
     <script>
+        let socket;
+        let currentTaskId = null;
         let uploadedFiles = [];
-        let subtitleTracks = [];
-        let draggedItem = null;
 
-        // 파일 업로드 이벤트
-        document.getElementById('fileInput').addEventListener('change', handleFileUpload);
-
-        // 음량 슬라이더 이벤트
-        document.getElementById('audioVolume').addEventListener('input', function() {
-            document.getElementById('volumeLabel').textContent = this.value + '%';
-        });
-
-        async function handleFileUpload(event) {
-            const files = event.target.files;
+        // 소켓 연결
+        function initSocket() {
+            socket = io();
             
-            for (let file of files) {
-                const formData = new FormData();
-                formData.append('file', file);
-                
-                try {
-                    showMessage('파일을 업로드하는 중...', 'info');
-                    
-                    const response = await fetch('/upload', {
-                        method: 'POST',
-                        body: formData
-                    });
-                    
-                    const result = await response.json();
-                    
-                    if (response.ok) {
-                        uploadedFiles.push(result);
-                        showMessage(`${result.original_name} 업로드 완료!`, 'success');
-                        updateFileList();
-                        updateAudioSelector();
-                    } else {
-                        showMessage(result.error, 'error');
-                    }
-                } catch (error) {
-                    showMessage('업로드 중 오류가 발생했습니다.', 'error');
-                }
-            }
-        }
-
-        function updateFileList() {
-            const fileList = document.getElementById('fileList');
-            fileList.innerHTML = '';
-            
-            uploadedFiles.forEach((file, index) => {
-                const fileItem = document.createElement('div');
-                fileItem.className = 'file-item';
-                fileItem.innerHTML = `
-                    <div class="file-info">
-                        <span class="file-type ${file.type}">${file.type}</span>
-                        <span>${file.original_name}</span>
-                    </div>
-                    <button onclick="removeFile(${index})" style="background: #dc3545; color: white; border: none; padding: 5px 10px; border-radius: 5px; cursor: pointer;">삭제</button>
-                `;
-                fileList.appendChild(fileItem);
+            socket.on('connect', function() {
+                console.log('서버에 연결되었습니다');
+                document.getElementById('connectionStatus').textContent = '✅ 연결됨';
+                document.getElementById('connectionStatus').className = 'connection-status connected';
             });
 
-            updateSortableFiles();
-        }
+            socket.on('disconnect', function() {
+                console.log('서버 연결이 끊어졌습니다');
+                document.getElementById('connectionStatus').textContent = '❌ 연결 끊김';
+                document.getElementById('connectionStatus').className = 'connection-status disconnected';
+            });
 
-        function updateSortableFiles() {
-            const sortableList = document.getElementById('sortableFiles');
-            const videoImageFiles = uploadedFiles.filter(f => f.type === 'video' || f.type === 'image');
-            
-            if (videoImageFiles.length === 0) {
-                sortableList.innerHTML = '<p class="empty-message">비디오나 이미지 파일을 업로드하면 여기에 표시됩니다.</p>';
-                return;
-            }
+            socket.on('task_progress', function(data) {
+                updateProgress(data);
+            });
 
-            sortableList.innerHTML = '';
-            
-            videoImageFiles.forEach((file, index) => {
-                const item = document.createElement('div');
-                item.className = 'sortable-item';
-                item.draggable = true;
-                item.dataset.filename = file.filename;
-                item.dataset.type = file.type;
-                
-                item.innerHTML = `
-                    <div class="item-info">
-                        <span class="drag-handle">⋮⋮</span>
-                        <span class="file-type ${file.type}">${file.type}</span>
-                        <span>${file.original_name}</span>
-                    </div>
-                    <div>
-                        ${file.type === 'image' ? 
-                            `<input type="number" class="duration-input" value="3" min="0.1" step="0.1" placeholder="초">초` : 
-                            ''}
-                    </div>
-                `;
-                
-                // 드래그 이벤트 추가
-                item.addEventListener('dragstart', handleDragStart);
-                item.addEventListener('dragover', handleDragOver);
-                item.addEventListener('drop', handleDrop);
-                item.addEventListener('dragend', handleDragEnd);
-                
-                sortableList.appendChild(item);
+            socket.on('task_status', function(data) {
+                updateTaskStatus(data);
+            });
+
+            socket.on('task_completed', function(data) {
+                handleTaskCompleted(data);
+            });
+
+            socket.on('task_error', function(data) {
+                handleTaskError(data);
             });
         }
 
-        function updateAudioSelector() {
-            const audioSelect = document.getElementById('finalAudioSelect');
+        // 진행상황 업데이트
+        function updateProgress(data) {
+            const progressContainer = document.getElementById('progressContainer');
+            const progressFill = document.getElementById('progressFill');
+            const progressText = document.getElementById('progressText');
+            const progressPercent = document.getElementById('progressPercent');
+            const progressStep = document.getElementById('progressStep');
+            const estimatedTime = document.getElementById('estimatedTime');
+
+            progressContainer.style.display = 'block';
+            progressFill.style.width = data.progress + '%';
+            progressText.textContent = data.message;
+            progressPercent.textContent = data.progress + '%';
+            progressStep.textContent = `${data.current_step} / ${data.total_steps}`;
             
-            // 기존 옵션 유지하고 새 옵션 추가
-            const currentOptions = Array.from(audioSelect.options).map(option => option.value);
-            
-            uploadedFiles.filter(f => f.type === 'audio').forEach(file => {
-                if (!currentOptions.includes(file.filename)) {
-                    const option = document.createElement('option');
-                    option.value = file.filename;
-                    option.textContent = file.original_name;
-                    audioSelect.appendChild(option);
-                }
-            });
-        }
-
-        function removeFile(index) {
-            uploadedFiles.splice(index, 1);
-            updateFileList();
-            updateAudioSelector();
-        }
-
-        // 드래그 앤 드롭 함수들
-        function handleDragStart(e) {
-            draggedItem = this;
-            this.classList.add('dragging');
-            e.dataTransfer.effectAllowed = 'move';
-        }
-
-        function handleDragOver(e) {
-            e.preventDefault();
-            e.dataTransfer.dropEffect = 'move';
-        }
-
-        function handleDrop(e) {
-            e.preventDefault();
-            
-            if (this !== draggedItem) {
-                const sortableList = document.getElementById('sortableFiles');
-                const items = Array.from(sortableList.children);
-                const draggedIndex = items.indexOf(draggedItem);
-                const targetIndex = items.indexOf(this);
-                
-                if (draggedIndex < targetIndex) {
-                    this.parentNode.insertBefore(draggedItem, this.nextSibling);
-                } else {
-                    this.parentNode.insertBefore(draggedItem, this);
-                }
+            if (data.estimated_time) {
+                const minutes = Math.floor(data.estimated_time / 60);
+                const seconds = Math.floor(data.estimated_time % 60);
+                estimatedTime.textContent = `예상 남은 시간: ${minutes}분 ${seconds}초`;
             }
         }
 
-        function handleDragEnd(e) {
-            this.classList.remove('dragging');
-            draggedItem = null;
+        // 작업 상태 업데이트
+        function updateTaskStatus(data) {
+            const statusIndicator = document.createElement('span');
+            statusIndicator.className = `status-indicator status-${data.status}`;
+            
+            const progressText = document.getElementById('progressText');
+            const pauseBtn = document.getElementById('pauseBtn');
+            const resumeBtn = document.getElementById('resumeBtn');
+            
+            if (data.status === 'paused') {
+                pauseBtn.style.display = 'none';
+                resumeBtn.style.display = 'inline-block';
+            } else if (data.status === 'running') {
+                pauseBtn.style.display = 'inline-block';
+                resumeBtn.style.display = 'none';
+            }
+            
+            progressText.innerHTML = statusIndicator.outerHTML + data.message;
         }
 
-        // 자막 트랙 관리
-        function addSubtitleTrack() {
-            const trackId = Date.now();
-            const subtitleSettings = document.getElementById('subtitleSettings');
-            
-            const track = document.createElement('div');
-            track.className = 'subtitle-track';
-            track.dataset.trackId = trackId;
-            
-            track.innerHTML = `
-                <div class="subtitle-controls">
-                    <input type="text" placeholder="자막 텍스트" class="subtitle-text">
-                    <input type="number" placeholder="시작(초)" class="subtitle-start" value="0" min="0" step="0.1">
-                    <input type="number" placeholder="종료(초)" class="subtitle-end" value="5" min="0" step="0.1">
-                    <button class="remove-subtitle-btn" onclick="removeSubtitleTrack(${trackId})">삭제</button>
+        // 작업 완료 처리
+        function handleTaskCompleted(data) {
+            const results = document.getElementById('results');
+            results.innerHTML = `
+                <div class="alert alert-success">
+                    <h4>✅ ${data.message}</h4>
+                    <p>파일이 성공적으로 생성되었습니다.</p>
+                    <a href="/download/${data.output_file}" class="btn" target="_blank">📥 다운로드</a>
                 </div>
             `;
             
-            subtitleSettings.insertBefore(track, subtitleSettings.lastElementChild);
-            subtitleTracks.push(trackId);
-        }
-
-        function removeSubtitleTrack(trackId) {
-            const track = document.querySelector(`[data-track-id="${trackId}"]`);
-            if (track) {
-                track.remove();
-                subtitleTracks = subtitleTracks.filter(id => id !== trackId);
-            }
-        }
-
-        // 최종 영상 제작
-        async function createFinalVideo() {
-            const sortableItems = document.querySelectorAll('.sortable-item');
-            const audioFile = document.getElementById('finalAudioSelect').value;
-            const audioVolume = document.getElementById('audioVolume').value;
-            const outputQuality = document.getElementById('outputQuality').value;
-            const videoTitle = document.getElementById('videoTitle').value;
-            
-            if (sortableItems.length === 0) {
-                showMessage('비디오나 이미지 파일을 최소 1개 추가해주세요.', 'error');
-                return;
-            }
-            
-            // 파일 순서대로 정리
-            const files = Array.from(sortableItems).map(item => {
-                const fileData = {
-                    filename: item.dataset.filename,
-                    type: item.dataset.type
-                };
-                
-                if (item.dataset.type === 'image') {
-                    const durationInput = item.querySelector('.duration-input');
-                    fileData.duration = parseFloat(durationInput.value) || 3;
-                }
-                
-                return fileData;
-            });
-            
-            // 자막 정보 수집
-            const subtitles = [];
-            document.querySelectorAll('.subtitle-track').forEach(track => {
-                const text = track.querySelector('.subtitle-text').value;
-                const start = parseFloat(track.querySelector('.subtitle-start').value) || 0;
-                const end = parseFloat(track.querySelector('.subtitle-end').value) || 5;
-                
-                if (text.trim()) {
-                    subtitles.push({
-                        text: text.trim(),
-                        start_time: start,
-                        end_time: end
-                    });
-                }
-            });
-            
-            document.getElementById('finalLoading').style.display = 'block';
-            
-            try {
-                const response = await fetch('/process', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        operation: 'create_final_video',
-                        files: files,
-                        audio_file: audioFile || null,
-                        audio_volume: parseInt(audioVolume),
-                        subtitles: subtitles,
-                        output_quality: outputQuality,
-                        video_title: videoTitle
-                    })
-                });
-                
-                const result = await response.json();
-                
-                if (response.ok) {
-                    showResult(result.message, result.output_file);
-                } else {
-                    showMessage(result.error, 'error');
-                }
-            } catch (error) {
-                showMessage('영상 제작 중 오류가 발생했습니다.', 'error');
-            } finally {
-                document.getElementById('finalLoading').style.display = 'none';
-            }
-        }
-
-        function showMessage(message, type) {
-            const messageArea = document.getElementById('messageArea');
-            const messageDiv = document.createElement('div');
-            messageDiv.className = `message ${type}`;
-            messageDiv.textContent = message;
-            
-            messageArea.appendChild(messageDiv);
-            
+            // 진행상황 숨기기
             setTimeout(() => {
-                messageDiv.remove();
+                document.getElementById('progressContainer').style.display = 'none';
+                currentTaskId = null;
+                enableProcessButton();
             }, 3000);
         }
 
-        function showResult(message, filename) {
-            const resultSection = document.getElementById('resultSection');
-            const resultMessage = document.getElementById('resultMessage');
-            const downloadLink = document.getElementById('downloadLink');
+        // 작업 에러 처리
+        function handleTaskError(data) {
+            const results = document.getElementById('results');
+            results.innerHTML = `
+                <div class="alert alert-error">
+                    <h4>❌ 오류 발생</h4>
+                    <p>${data.error}</p>
+                </div>
+            `;
             
-            resultMessage.innerHTML = `<div class="message success">${message}</div>`;
-            downloadLink.innerHTML = `<a href="/download/${filename}" class="download-btn">📥 다운로드</a>`;
-            
-            resultSection.style.display = 'block';
-            resultSection.scrollIntoView({ behavior: 'smooth' });
+            document.getElementById('progressContainer').style.display = 'none';
+            currentTaskId = null;
+            enableProcessButton();
         }
 
-        // 페이지 로드 시 기존 파일 목록 불러오기
-        window.addEventListener('load', async () => {
-            try {
-                const response = await fetch('/files');
-                const result = await response.json();
-                
-                if (response.ok) {
-                    uploadedFiles = result.files.map(file => ({
-                        filename: file.filename,
-                        type: file.type,
-                        original_name: file.filename
-                    }));
-                    updateFileList();
-                    updateAudioSelector();
-                }
-            } catch (error) {
-                console.log('기존 파일 목록을 불러올 수 없습니다.');
+        // 작업 제어 함수들
+        function pauseTask() {
+            if (currentTaskId) {
+                socket.emit('pause_task', { task_id: currentTaskId });
             }
+        }
+
+        function resumeTask() {
+            if (currentTaskId) {
+                socket.emit('resume_task', { task_id: currentTaskId });
+            }
+        }
+
+        function cancelTask() {
+            if (currentTaskId) {
+                socket.emit('cancel_task', { task_id: currentTaskId });
+                document.getElementById('progressContainer').style.display = 'none';
+                currentTaskId = null;
+                enableProcessButton();
+            }
+        }
+
+        // 파일 업로드
+        function uploadFiles() {
+            const fileInput = document.getElementById('fileInput');
+            const files = fileInput.files;
+            
+            if (files.length === 0) {
+                alert('파일을 선택해주세요.');
+                return;
+            }
+
+            Array.from(files).forEach(file => {
+                const formData = new FormData();
+                formData.append('file', file);
+
+                fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        alert('오류: ' + data.error);
+                    } else {
+                        uploadedFiles.push(data);
+                        updateFilesList();
+                        updateFileSelectors();
+                    }
+                })
+                .catch(error => {
+                    alert('업로드 중 오류가 발생했습니다: ' + error);
+                });
+            });
+            
+            fileInput.value = '';
+        }
+
+        // 파일 목록 업데이트
+        function updateFilesList() {
+            const container = document.getElementById('filesContainer');
+            if (uploadedFiles.length === 0) {
+                container.innerHTML = '<p style="color: #666;">업로드된 파일이 없습니다.</p>';
+                return;
+            }
+
+            container.innerHTML = uploadedFiles.map(file => `
+                <div class="file-item">
+                    <div>
+                        <strong>${file.original_name}</strong>
+                        <span class="badge">${file.type}</span>
+                    </div>
+                    <button onclick="removeFile('${file.filename}')" class="btn btn-danger">삭제</button>
+                </div>
+            `).join('');
+        }
+
+        // 파일 삭제
+        function removeFile(filename) {
+            uploadedFiles = uploadedFiles.filter(file => file.filename !== filename);
+            updateFilesList();
+            updateFileSelectors();
+        }
+
+        // 파일 선택기 업데이트
+        function updateFileSelectors() {
+            const audioFile = document.getElementById('audioFile');
+            const videoFile = document.getElementById('videoFile');
+            
+            // 오디오 파일 옵션 업데이트
+            audioFile.innerHTML = '<option value="">음악 파일을 선택하세요</option>';
+            uploadedFiles.filter(f => f.type === 'audio').forEach(file => {
+                audioFile.innerHTML += `<option value="${file.filename}">${file.original_name}</option>`;
+            });
+            
+            // 비디오 파일 옵션 업데이트
+            videoFile.innerHTML = '<option value="">비디오 파일을 선택하세요</option>';
+            uploadedFiles.filter(f => f.type === 'video').forEach(file => {
+                videoFile.innerHTML += `<option value="${file.filename}">${file.original_name}</option>`;
+            });
+        }
+
+        // 폼 필드 업데이트
+        function updateFormFields() {
+            const operationType = document.getElementById('operationType').value;
+            const audioSettings = document.getElementById('audioSettings');
+            const subtitleSettings = document.getElementById('subtitleSettings');
+            const finalVideoSettings = document.getElementById('finalVideoSettings');
+            
+            // 모든 설정 숨기기
+            audioSettings.style.display = 'none';
+            subtitleSettings.style.display = 'none';
+            finalVideoSettings.style.display = 'none';
+            
+            // 선택된 작업에 따라 필요한 설정 표시
+            if (operationType === 'add_audio' || operationType === 'create_final_video') {
+                audioSettings.style.display = 'block';
+            }
+            if (operationType === 'add_subtitle') {
+                subtitleSettings.style.display = 'block';
+            }
+            if (operationType === 'create_final_video') {
+                finalVideoSettings.style.display = 'block';
+            }
+        }
+
+        // 비디오 처리
+        function processVideo() {
+            const operationType = document.getElementById('operationType').value;
+            
+            if (uploadedFiles.length === 0) {
+                alert('먼저 파일을 업로드해주세요.');
+                return;
+            }
+
+            const data = {
+                operation: operationType,
+                files: uploadedFiles.filter(f => f.type === 'video' || f.type === 'image')
+            };
+
+            // 작업별 추가 데이터
+            if (operationType === 'add_audio' || operationType === 'create_final_video') {
+                data.audio_file = document.getElementById('audioFile').value;
+                data.audio_volume = parseInt(document.getElementById('audioVolume').value);
+            }
+            
+            if (operationType === 'add_subtitle') {
+                data.video_file = document.getElementById('videoFile').value;
+                data.subtitle_text = document.getElementById('subtitleText').value;
+                data.start_time = parseFloat(document.getElementById('startTime').value);
+                data.end_time = parseFloat(document.getElementById('endTime').value);
+            }
+            
+            if (operationType === 'create_final_video') {
+                data.video_title = document.getElementById('videoTitle').value;
+                data.output_quality = document.getElementById('outputQuality').value;
+                // 자막 데이터 추가 (향후 확장 가능)
+                data.subtitles = [];
+            }
+
+            // 요청 전송
+            fetch('/process', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(data)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    alert('오류: ' + data.error);
+                } else {
+                    currentTaskId = data.task_id;
+                    disableProcessButton();
+                    document.getElementById('results').innerHTML = `
+                        <div class="alert alert-info">
+                            <h4>📡 ${data.message}</h4>
+                            <p>작업 ID: ${data.task_id}</p>
+                        </div>
+                    `;
+                }
+            })
+            .catch(error => {
+                alert('처리 중 오류가 발생했습니다: ' + error);
+            });
+        }
+
+        // 처리 버튼 비활성화/활성화
+        function disableProcessButton() {
+            const btn = document.getElementById('processBtn');
+            btn.disabled = true;
+            btn.textContent = '⏳ 처리 중...';
+        }
+
+        function enableProcessButton() {
+            const btn = document.getElementById('processBtn');
+            btn.disabled = false;
+            btn.textContent = '🚀 처리 시작';
+        }
+
+        // 볼륨 슬라이더 이벤트
+        document.getElementById('audioVolume').addEventListener('input', function() {
+            document.getElementById('volumeValue').textContent = this.value;
         });
+
+        // 초기화
+        window.onload = function() {
+            initSocket();
+            updateFormFields();
+            
+            // 기존 파일 목록 로드
+            fetch('/files')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.files) {
+                        uploadedFiles = data.files;
+                        updateFilesList();
+                        updateFileSelectors();
+                    }
+                });
+        };
     </script>
 </body>
 </html>
