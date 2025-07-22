@@ -4,8 +4,10 @@ from flask_socketio import SocketIO, emit
 import os
 import threading
 import time
-import signal
-import sys
+import uuid
+import tempfile
+import logging
+from werkzeug.utils import secure_filename
 
 # MoviePy import (editor 없이)
 from moviepy.video.io.VideoFileClip import VideoFileClip
@@ -13,6 +15,113 @@ from moviepy.audio.io.AudioFileClip import AudioFileClip
 from moviepy.video.VideoClip import ImageClip, TextClip
 from moviepy.video.compositing.CompositeVideoClip import CompositeVideoClip
 from moviepy import concatenate_videoclips, concatenate_audioclips
+
+# MoviePy 설정 - 2.x.x 호환 with 안전한 FFmpeg 설정
+import moviepy.config as config
+
+# FFmpeg 바이너리 안전하게 설정
+try:
+    # FFmpeg 경로 확인 및 설정
+    import shutil
+    ffmpeg_path = shutil.which('ffmpeg')
+    if ffmpeg_path:
+        config.FFMPEG_BINARY = ffmpeg_path
+        print(f"✅ FFmpeg found at: {ffmpeg_path}")
+    else:
+        config.FFMPEG_BINARY = 'ffmpeg'  # 기본값 사용
+        print("⚠️ FFmpeg not found in PATH, using default")
+except Exception as e:
+    config.FFMPEG_BINARY = 'ffmpeg'
+    print(f"⚠️ FFmpeg 설정 중 오류: {e}")
+
+# 임시 파일 경로를 절대 경로로 설정
+temp_dir = os.path.abspath('temp')
+os.makedirs(temp_dir, exist_ok=True)
+config.TEMP_FOLDER = temp_dir
+
+# MoviePy에서 subprocess 관련 오류 방지를 위한 추가 설정
+try:
+    # MoviePy의 내부 설정 조정
+    import moviepy.video.io.ffmpeg_tools as ffmpeg_tools
+    # FFmpeg 실행 시 stdout/stderr 처리 개선
+    original_ffmpeg_parse_infos = getattr(ffmpeg_tools, 'ffmpeg_parse_infos', None)
+    if original_ffmpeg_parse_infos:
+        def safe_ffmpeg_parse_infos(filename, print_infos=False, check_duration=True):
+            try:
+                return original_ffmpeg_parse_infos(filename, print_infos=False, check_duration=check_duration)
+            except Exception as e:
+                print(f"Warning: FFmpeg info parsing failed: {e}")
+                return None
+        ffmpeg_tools.ffmpeg_parse_infos = safe_ffmpeg_parse_infos
+    
+    # subprocess.Popen 관련 오류 방지
+    import subprocess
+    original_popen = subprocess.Popen
+    def safe_popen(*args, **kwargs):
+        # stdout/stderr를 안전하게 처리
+        if 'stdout' not in kwargs:
+            kwargs['stdout'] = subprocess.PIPE
+        if 'stderr' not in kwargs:
+            kwargs['stderr'] = subprocess.PIPE
+        try:
+            return original_popen(*args, **kwargs)
+        except Exception as e:
+            print(f"Warning: subprocess.Popen failed: {e}")
+            # DEVNULL로 재시도
+            kwargs['stdout'] = subprocess.DEVNULL
+            kwargs['stderr'] = subprocess.DEVNULL
+            return original_popen(*args, **kwargs)
+    
+    # 원래 Popen을 안전한 버전으로 교체
+    subprocess.Popen = safe_popen
+    
+except ImportError:
+    pass  # 해당 모듈이 없으면 무시
+
+# MoviePy 로깅 완전 비활성화
+logging.getLogger('moviepy').setLevel(logging.ERROR)
+logging.getLogger('imageio').setLevel(logging.ERROR)
+logging.getLogger('imageio_ffmpeg').setLevel(logging.ERROR)
+
+# subprocess stdout/stderr 오류 방지 데코레이터
+def handle_subprocess_errors(func):
+    """subprocess stdout/stderr 관련 오류를 처리하는 데코레이터"""
+    def wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except AttributeError as e:
+            if "'NoneType' object has no attribute 'stdout'" in str(e):
+                print(f"⚠️ FFmpeg subprocess 오류 감지: {e}")
+                print("🔄 대안 방법으로 재시도 중...")
+                # 환경 변수로 FFmpeg 출력 제어
+                import os
+                old_env = os.environ.get('MOVIEPY_VERBOSE', None)
+                os.environ['MOVIEPY_VERBOSE'] = 'False'
+                try:
+                    result = func(*args, **kwargs)
+                    return result
+                except Exception as e2:
+                    print(f"❌ 재시도도 실패: {e2}")
+                    raise e2
+                finally:
+                    if old_env is not None:
+                        os.environ['MOVIEPY_VERBOSE'] = old_env
+                    else:
+                        os.environ.pop('MOVIEPY_VERBOSE', None)
+            else:
+                raise e
+        except Exception as e:
+            if "stdout" in str(e) or "stderr" in str(e):
+                print(f"⚠️ 출력 스트림 관련 오류: {e}")
+                # 최소한의 복구 시도
+                try:
+                    import sys
+                    sys.stdout.flush()
+                    sys.stderr.flush()
+                except:
+                    pass
+            raise e
+    return wrapper
 
 # CompositeAudioClip import 시도
 try:
@@ -32,18 +141,119 @@ try:
     def volumex(clip, factor):
         return clip.with_effects([MultiplyVolume(factor)])
 except ImportError:
-    try:
-        # 구버전에서는 volumex 사용 (대부분의 환경에서는 사용할 수 없음)
-        # from moviepy.audio.fx.volumex import volumex
-        pass
-    except ImportError:
-        # 모든 시도가 실패하면 None으로 설정
-        volumex = None
+    volumex = None
 
-import os
-import tempfile
-import uuid
-from werkzeug.utils import secure_filename
+# 안전한 TextClip 생성 함수
+def create_text_clip_safe(text, font_size=50, color='white', stroke_color='black', stroke_width=2):
+    """폰트 오류에 안전한 TextClip 생성 함수"""
+    try:
+        # 첫 번째 시도: stroke 효과와 함께
+        return TextClip(
+            text,
+            font_size=font_size,
+            color=color,
+            stroke_color=stroke_color,
+            stroke_width=stroke_width
+        )
+    except Exception as e1:
+        print(f"Warning: stroke 효과로 자막 생성 실패: {e1}")
+        try:
+            # 두 번째 시도: stroke 없이
+            return TextClip(
+                text,
+                font_size=font_size,
+                color=color
+            )
+        except Exception as e2:
+            print(f"Warning: 기본 설정으로 자막 생성 실패: {e2}")
+            try:
+                # 세 번째 시도: 최소한의 설정
+                return TextClip(text, font_size=font_size)
+            except Exception as e3:
+                print(f"Error: 자막 생성 완전 실패: {e3}")
+                # 마지막 시도: 매우 기본적인 설정
+                return TextClip(text)
+
+# 안전한 VideoFileClip 로딩 함수
+@handle_subprocess_errors
+def safe_load_video(filepath):
+    """안전한 비디오 파일 로딩"""
+    try:
+        return VideoFileClip(filepath)
+    except Exception as e:
+        print(f"Warning: 비디오 로딩 실패: {e}")
+        # 오디오 없이 로딩 시도
+        try:
+            return VideoFileClip(filepath, audio=False)
+        except Exception as e2:
+            print(f"Error: 오디오 없이도 로딩 실패: {e2}")
+            raise e2
+
+# 안전한 AudioFileClip 로딩 함수
+@handle_subprocess_errors
+def safe_load_audio(filepath):
+    """안전한 오디오 파일 로딩"""
+    try:
+        return AudioFileClip(filepath)
+    except Exception as e:
+        print(f"Error: 오디오 로딩 실패: {e}")
+        raise e
+
+# 안전한 비디오 저장 함수
+@handle_subprocess_errors
+def safe_write_videofile(clip, output_path, **kwargs):
+    """안전한 비디오 저장 함수 - stdout/stderr 오류 방지"""
+    # MoviePy 2.x.x: 임시 오디오 파일 경로를 temp 폴더로 강제 지정
+    if 'temp_audiofile' in kwargs:
+        temp_filename = kwargs['temp_audiofile']
+        if not os.path.isabs(temp_filename) and not temp_filename.startswith('temp'):
+            kwargs['temp_audiofile'] = os.path.join(config.TEMP_FOLDER, os.path.basename(temp_filename))
+
+    # MoviePy 2.x.x에서 stdout/stderr 오류 방지
+    default_kwargs = {
+        'codec': 'libx264',
+        'audio_codec': 'aac',
+        'logger': None,    # 로거 비활성화
+        'write_logfile': False  # 로그 파일 쓰기 비활성화
+    }
+    
+    # 기본값과 사용자 제공 kwargs 병합
+    final_kwargs = {**default_kwargs, **kwargs}
+    
+    try:
+        # stdout/stderr 리다이렉션으로 오류 방지
+        import sys
+        from io import StringIO
+        
+        # 표준 출력/에러 임시 저장
+        old_stdout = sys.stdout
+        old_stderr = sys.stderr
+        
+        # 임시로 출력을 문자열 버퍼로 리다이렉션
+        sys.stdout = StringIO()
+        sys.stderr = StringIO()
+        
+        try:
+            clip.write_videofile(output_path, **final_kwargs)
+        finally:
+            # 표준 출력/에러 복원
+            sys.stdout = old_stdout
+            sys.stderr = old_stderr
+            
+    except Exception as e:
+        print(f"Error: 비디오 저장 실패: {e}")
+        # 대안 방법으로 재시도
+        try:
+            print("기본 설정으로 재시도 중...")
+            # 최소한의 설정으로 재시도
+            clip.write_videofile(
+                output_path,
+                codec='libx264',
+                audio_codec='aac'
+            )
+        except Exception as e2:
+            print(f"Error: 재시도도 실패: {e2}")
+            raise e2
 
 app = Flask(__name__)
 CORS(app)
@@ -145,13 +355,43 @@ task_manager = TaskManager()
 # 설정
 UPLOAD_FOLDER = 'uploads'
 OUTPUT_FOLDER = 'outputs'
+TEMP_FOLDER = 'temp'
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['OUTPUT_FOLDER'] = OUTPUT_FOLDER
+app.config['TEMP_FOLDER'] = TEMP_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024  # 100MB 제한
 
 # 폴더 생성
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(OUTPUT_FOLDER, exist_ok=True)
+os.makedirs(TEMP_FOLDER, exist_ok=True)
+
+# 시작 시 temp 파일 정리 함수
+def cleanup_temp_files():
+    """서버 시작 시 temp 파일들을 정리"""
+    try:
+        # temp 폴더의 모든 파일 삭제
+        for filename in os.listdir(TEMP_FOLDER):
+            filepath = os.path.join(TEMP_FOLDER, filename)
+            if os.path.isfile(filepath):
+                os.remove(filepath)
+                print(f"Cleaned up temp file: {filename}")
+        
+        # 프로젝트 루트의 임시 파일들도 정리
+        for filename in os.listdir('.'):
+            if (filename.startswith('temp-audio') or 
+                filename.startswith('My_Video') or 
+                filename.endswith('.m4a')):
+                try:
+                    os.remove(filename)
+                    print(f"Cleaned up root temp file: {filename}")
+                except:
+                    pass
+    except Exception as e:
+        print(f"Error during temp file cleanup: {e}")
+
+# 서버 시작 시 temp 파일 정리 실행
+cleanup_temp_files()
 
 # 허용된 파일 확장자
 ALLOWED_VIDEO_EXTENSIONS = {'mp4', 'avi', 'mov', 'mkv', 'webm'}
@@ -291,7 +531,7 @@ def concatenate_media(data):
         filepath = os.path.join(app.config['UPLOAD_FOLDER'], file_info['filename'])
         
         if file_info['type'] == 'video':
-            clip = VideoFileClip(filepath)
+            clip = safe_load_video(filepath)
         elif file_info['type'] == 'image':
             # 이미지는 3초 동안 표시
             duration = file_info.get('duration', 3)
@@ -307,7 +547,7 @@ def concatenate_media(data):
     output_path = os.path.join(app.config['OUTPUT_FOLDER'], output_filename)
     
     # 비디오 저장
-    final_clip.write_videofile(output_path, codec='libx264', audio_codec='aac')
+    safe_write_videofile(final_clip, output_path)
     
     # 메모리 정리
     for clip in clips:
@@ -337,7 +577,7 @@ def add_audio_to_video(data):
         filepath = os.path.join(app.config['UPLOAD_FOLDER'], file_info['filename'])
         
         if file_info['type'] == 'video':
-            clip = VideoFileClip(filepath)
+            clip = safe_load_video(filepath)
         elif file_info['type'] == 'image':
             # 이미지는 지정된 시간 또는 기본 3초 동안 표시
             duration = file_info.get('duration', 3)
@@ -353,7 +593,7 @@ def add_audio_to_video(data):
     
     # 배경음악 로드
     audio_path = os.path.join(app.config['UPLOAD_FOLDER'], audio_file)
-    audio_clip = AudioFileClip(audio_path)
+    audio_clip = safe_load_audio(audio_path)
     
     # 배경음악을 비디오 길이에 맞춤
     if audio_clip.duration > combined_video.duration:
@@ -373,7 +613,7 @@ def add_audio_to_video(data):
     output_path = os.path.join(app.config['OUTPUT_FOLDER'], output_filename)
     
     # 비디오 저장
-    final_clip.write_videofile(output_path, codec='libx264', audio_codec='aac')
+    safe_write_videofile(final_clip, output_path)
     
     # 메모리 정리
     for clip in clips:
@@ -400,17 +640,15 @@ def add_subtitle_to_video(data):
     video_path = os.path.join(app.config['UPLOAD_FOLDER'], video_file)
     
     # 비디오 로드
-    video_clip = VideoFileClip(video_path)
+    video_clip = safe_load_video(video_path)
     
     # 자막 생성
-    txt_clip = TextClip(
+    txt_clip = create_text_clip_safe(
         subtitle_text,
-        fontsize=50,
+        font_size=50,
         color='white',
-        font='Arial-Bold',
         stroke_color='black',
-        stroke_width=2,
-        method='caption'
+        stroke_width=2
     ).with_position(('center', 'bottom')).with_duration(end_time - start_time).with_start(start_time)
     
     # 비디오에 자막 합성
@@ -421,7 +659,7 @@ def add_subtitle_to_video(data):
     output_path = os.path.join(app.config['OUTPUT_FOLDER'], output_filename)
     
     # 비디오 저장
-    final_clip.write_videofile(output_path, codec='libx264', audio_codec='aac')
+    safe_write_videofile(final_clip, output_path)
     
     # 메모리 정리
     video_clip.close()
@@ -433,6 +671,7 @@ def add_subtitle_to_video(data):
         'output_file': output_filename
     })
 
+@handle_subprocess_errors
 def create_final_video_with_progress(data, task_id):
     """모든 요소를 포함한 최종 비디오 생성 (진행상황 추적)"""
     try:
@@ -465,7 +704,7 @@ def create_final_video_with_progress(data, task_id):
             filepath = os.path.join(app.config['UPLOAD_FOLDER'], file_info['filename'])
             
             if file_info['type'] == 'video':
-                clip = VideoFileClip(filepath)
+                clip = safe_load_video(filepath)
             elif file_info['type'] == 'image':
                 duration = file_info.get('duration', 3)
                 clip = ImageClip(filepath, duration=duration)
@@ -495,7 +734,7 @@ def create_final_video_with_progress(data, task_id):
             
             task_manager.update_progress(task_id, current_step, "배경음악을 처리 중...")
             audio_path = os.path.join(app.config['UPLOAD_FOLDER'], audio_file)
-            audio_clip = AudioFileClip(audio_path)
+            audio_clip = safe_load_audio(audio_path)
             current_step += 2
             
             # 오디오 볼륨 조정
@@ -552,17 +791,20 @@ def create_final_video_with_progress(data, task_id):
                     return
                 task_manager.wait_if_paused(task_id)
                 
-                txt_clip = TextClip(
-                    subtitle['text'],
-                    fontsize=50,
-                    color='white',
-                    font='Arial-Bold',
-                    stroke_color='black',
-                    stroke_width=2,
-                    method='caption'
-                ).with_position(('center', 'bottom')).with_duration(
-                    subtitle['end_time'] - subtitle['start_time']
-                ).with_start(subtitle['start_time'])
+                try:
+                    txt_clip = create_text_clip_safe(
+                        subtitle['text'],
+                        font_size=50,
+                        color='white',
+                        stroke_color='black',
+                        stroke_width=2
+                    ).with_position(('center', 'bottom')).with_duration(
+                        subtitle['end_time'] - subtitle['start_time']
+                    ).with_start(subtitle['start_time'])
+                except Exception as e:
+                    # 안전한 함수 실행에도 실패하면 로그만 남기고 건너뛰기
+                    print(f"Error: 자막 생성 완전 실패: {e}")
+                    continue
                 
                 video_clips.append(txt_clip)
                 current_step += 2
@@ -617,14 +859,11 @@ def create_final_video_with_progress(data, task_id):
             task_manager.update_progress(task_id, total_progress, f"비디오 저장 중... {int((chunk/file_size)*100)}%")
         
         # 비디오 저장
-        final_clip.write_videofile(
+        safe_write_videofile(
+            final_clip,
             output_path, 
-            codec='libx264', 
-            audio_codec='aac',
             bitrate=bitrate,
-            temp_audiofile=f'temp-audio-{uuid.uuid4().hex[:8]}.m4a',
-            verbose=False,
-            logger=None
+            temp_audiofile=f'temp-audio-{uuid.uuid4().hex[:8]}.m4a'
         )
         
         # 메모리 정리
@@ -649,6 +888,7 @@ def create_final_video_with_progress(data, task_id):
             'error': str(e)
         })
 
+@handle_subprocess_errors
 def concatenate_media_with_progress(data, task_id):
     """영상/이미지 합치기 (진행상황 추적)"""
     try:
@@ -673,7 +913,7 @@ def concatenate_media_with_progress(data, task_id):
             filepath = os.path.join(app.config['UPLOAD_FOLDER'], file_info['filename'])
             
             if file_info['type'] == 'video':
-                clip = VideoFileClip(filepath)
+                clip = safe_load_video(filepath)
             elif file_info['type'] == 'image':
                 duration = file_info.get('duration', 3)
                 clip = ImageClip(filepath, duration=duration)
@@ -696,7 +936,7 @@ def concatenate_media_with_progress(data, task_id):
         output_path = os.path.join(app.config['OUTPUT_FOLDER'], output_filename)
         
         task_manager.update_progress(task_id, current_step, "비디오를 저장 중...")
-        final_clip.write_videofile(output_path, codec='libx264', audio_codec='aac', verbose=False, logger=None)
+        safe_write_videofile(final_clip, output_path)
         
         # 메모리 정리
         for clip in clips:
@@ -715,6 +955,7 @@ def concatenate_media_with_progress(data, task_id):
     except Exception as e:
         task_manager.set_status(task_id, 'error', f'오류가 발생했습니다: {str(e)}')
 
+@handle_subprocess_errors
 def add_audio_to_video_with_progress(data, task_id):
     """배경음악 추가 (진행상황 추적)"""
     try:
@@ -742,7 +983,7 @@ def add_audio_to_video_with_progress(data, task_id):
             filepath = os.path.join(app.config['UPLOAD_FOLDER'], file_info['filename'])
             
             if file_info['type'] == 'video':
-                clip = VideoFileClip(filepath)
+                clip = safe_load_video(filepath)
             elif file_info['type'] == 'image':
                 duration = file_info.get('duration', 3)
                 clip = ImageClip(filepath, duration=duration)
@@ -765,7 +1006,7 @@ def add_audio_to_video_with_progress(data, task_id):
         
         # 배경음악 처리
         audio_path = os.path.join(app.config['UPLOAD_FOLDER'], audio_file)
-        audio_clip = AudioFileClip(audio_path)
+        audio_clip = safe_load_audio(audio_path)
         current_step += 20
         
         # 음악 길이 조정
@@ -786,7 +1027,7 @@ def add_audio_to_video_with_progress(data, task_id):
         output_path = os.path.join(app.config['OUTPUT_FOLDER'], output_filename)
         
         task_manager.update_progress(task_id, current_step, "비디오를 저장 중...")
-        final_clip.write_videofile(output_path, codec='libx264', audio_codec='aac', verbose=False, logger=None)
+        safe_write_videofile(final_clip, output_path)
         
         # 메모리 정리
         for clip in clips:
@@ -825,19 +1066,17 @@ def add_subtitle_to_video_with_progress(data, task_id):
         # 비디오 로드
         task_manager.update_progress(task_id, current_step, "비디오를 로딩 중...")
         video_path = os.path.join(app.config['UPLOAD_FOLDER'], video_file)
-        video_clip = VideoFileClip(video_path)
+        video_clip = safe_load_video(video_path)
         current_step += 40
         
         # 자막 생성
         task_manager.update_progress(task_id, current_step, "자막을 생성 중...")
-        txt_clip = TextClip(
+        txt_clip = create_text_clip_safe(
             subtitle_text,
-            fontsize=50,
+            font_size=50,
             color='white',
-            font='Arial-Bold',
             stroke_color='black',
-            stroke_width=2,
-            method='caption'
+            stroke_width=2
         ).with_position(('center', 'bottom')).with_duration(end_time - start_time).with_start(start_time)
         current_step += 20
         
@@ -851,7 +1090,7 @@ def add_subtitle_to_video_with_progress(data, task_id):
         output_path = os.path.join(app.config['OUTPUT_FOLDER'], output_filename)
         
         task_manager.update_progress(task_id, current_step, "비디오를 저장 중...")
-        final_clip.write_videofile(output_path, codec='libx264', audio_codec='aac', verbose=False, logger=None)
+        safe_write_videofile(final_clip, output_path)
         
         # 메모리 정리
         video_clip.close()
@@ -889,7 +1128,7 @@ def create_final_video(data):
         filepath = os.path.join(app.config['UPLOAD_FOLDER'], file_info['filename'])
         
         if file_info['type'] == 'video':
-            clip = VideoFileClip(filepath)
+            clip = safe_load_video(filepath)
         elif file_info['type'] == 'image':
             duration = file_info.get('duration', 3)
             clip = ImageClip(filepath, duration=duration)
@@ -905,7 +1144,7 @@ def create_final_video(data):
     # 3단계: 배경음악 추가 (있는 경우)
     if audio_file:
         audio_path = os.path.join(app.config['UPLOAD_FOLDER'], audio_file)
-        audio_clip = AudioFileClip(audio_path)
+        audio_clip = safe_load_audio(audio_path)
         
         # 오디오 볼륨 조정
         if volumex is not None:
@@ -964,17 +1203,20 @@ def create_final_video(data):
         video_clips = [final_clip]
         
         for subtitle in subtitles:
-            txt_clip = TextClip(
-                subtitle['text'],
-                fontsize=50,
-                color='white',
-                font='Arial-Bold',
-                stroke_color='black',
-                stroke_width=2,
-                method='caption'
-            ).with_position(('center', 'bottom')).with_duration(
-                subtitle['end_time'] - subtitle['start_time']
-            ).with_start(subtitle['start_time'])
+            try:
+                txt_clip = create_text_clip_safe(
+                    subtitle['text'],
+                    font_size=50,
+                    color='white',
+                    stroke_color='black',
+                    stroke_width=2
+                ).with_position(('center', 'bottom')).with_duration(
+                    subtitle['end_time'] - subtitle['start_time']
+                ).with_start(subtitle['start_time'])
+            except Exception as e:
+                # 안전한 함수 실행에도 실패하면 로그만 남기고 건너뛰기
+                print(f"Error: 자막 생성 완전 실패: {e}")
+                continue
             
             video_clips.append(txt_clip)
         
@@ -998,10 +1240,9 @@ def create_final_video(data):
     output_path = os.path.join(app.config['OUTPUT_FOLDER'], output_filename)
     
     # 비디오 저장
-    final_clip.write_videofile(
+    safe_write_videofile(
+        final_clip,
         output_path, 
-        codec='libx264', 
-        audio_codec='aac',
         bitrate=bitrate,
         temp_audiofile=f'temp-audio-{uuid.uuid4().hex[:8]}.m4a'
     )
@@ -1057,15 +1298,14 @@ def list_files():
         return jsonify({'error': f'파일 목록을 불러올 수 없습니다: {str(e)}'}), 500
 
 if __name__ == '__main__':
-    # 서버 시작 시 업로드 폴더 비우기
-    for filename in os.listdir(UPLOAD_FOLDER):
-        file_path = os.path.join(UPLOAD_FOLDER, filename)
-        if os.path.isfile(file_path):
-            os.remove(file_path)
-
     print("=== MoviePy 웹 비디오 에디터 ===")
     print("✅ MoviePy가 정상적으로 로드되었습니다.")
     print("🎬 모든 비디오 편집 기능을 사용할 수 있습니다.")
     print("🔄 실시간 진행상황 추적 기능이 활성화되었습니다.")
     print("🌐 브라우저에서 http://localhost:5000 으로 접속하세요")
-    socketio.run(app, debug=True, host='0.0.0.0', port=5000)
+    
+    # 안전한 서버 실행
+    try:
+        socketio.run(app, debug=True, host='0.0.0.0', port=5000, allow_unsafe_werkzeug=True)
+    except Exception as e:
+        print(f"서버 실행 중 오류: {e}")

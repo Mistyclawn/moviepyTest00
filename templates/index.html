@@ -821,26 +821,35 @@
         // 파일 선택기 업데이트
         function updateFileSelectors() {
             const audioFile = document.getElementById('audioFile');
-            const videoFile = document.getElementById('videoFile');
             
-            // 오디오 파일 옵션 업데이트
-            audioFile.innerHTML = '<option value="">음악 파일을 선택하세요</option>';
-            uploadedFiles.filter(f => f.type === 'audio').forEach(file => {
-                audioFile.innerHTML += `<option value="${file.filename}">${file.original_name}</option>`;
-            });
+            // audioFile 요소가 존재하는지 확인
+            if (audioFile) {
+                // 오디오 파일 옵션 업데이트
+                audioFile.innerHTML = '<option value="">음악 파일을 선택하세요</option>';
+                uploadedFiles.filter(f => f.type === 'audio').forEach(file => {
+                    audioFile.innerHTML += `<option value="${file.filename}">${file.original_name}</option>`;
+                });
+            }
             
-            // 비디오 파일 옵션 업데이트
-            videoFile.innerHTML = '<option value="">비디오 파일을 선택하세요</option>';
-            uploadedFiles.filter(f => f.type === 'video').forEach(file => {
-                videoFile.innerHTML += `<option value="${file.filename}">${file.original_name}</option>`;
-            });
+            // videoFile 선택기는 새로운 통합 UI에서 제거되었으므로 주석 처리
+            // const videoFile = document.getElementById('videoFile');
+            // if (videoFile) {
+            //     videoFile.innerHTML = '<option value="">비디오 파일을 선택하세요</option>';
+            //     uploadedFiles.filter(f => f.type === 'video').forEach(file => {
+            //         videoFile.innerHTML += `<option value="${file.filename}">${file.original_name}</option>`;
+            //     });
+            // }
         }
 
         // 해상도 선택 업데이트
         function updateResolutionSettings() {
             const quality = document.getElementById('outputQuality').value;
             const customDiv = document.getElementById('customResolution');
-            customDiv.style.display = quality === 'custom' ? 'block' : 'none';
+            
+            // customResolution 요소가 존재하는지 확인
+            if (customDiv) {
+                customDiv.style.display = quality === 'custom' ? 'block' : 'none';
+            }
         }
 
         // 통합 비디오 제작
